@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+from core.pdf_generator import generate_pdf_report
+import sys
+import os
+import json
+from pathlib import Path
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.markdown import Markdown
+
+CURRENT_DIR = Path(__file__).resolve().parent
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+
+from core.scanner import ReconScanner, LocalNetworkScanner
+from core.ai_engine import AIEngine
+
+console = Console()
+CONFIG_PATH = Path.home() / ".tree_config.json"
+
+BANNER = """[bold green]
+  ████████╗██████╗ ███████╗███████╗
+  ╚══██╔══╝██╔══██╗██╔════╝██╔════╝
+     ██║   ██████╔╝█████╗  █████╗  
+     ██║   ██╔══██╗██╔══╝  ██╔══╝  
+     ██║   ██║  ██║███████╗███████╗
+     ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝[/bold green]
+[dim]AI-Powered Penetration Testing & Vulnerability Assessment Console[/dim]
+"""
+
+def load_or_prompt_api_key() -> str:
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                data = json.load(f)
+                key = data.get("gemini_api_key", "").strip()
+                if key:
+                    return key
+        except Exception:
+            pass
+
+    console.print(Panel(
+        "[bold yellow]First-Time Setup Required[/bold yellow]\n\n"
+        "No saved Gemini API key found.\n"
+        "Please enter your Google Gemini API key (it will be saved to ~/.tree_config.json):",
+        border_style="yellow"
+    ))
+    
+    while True:
+        key = console.input("[bold cyan]Enter Gemini API Key: [/bold cyan]").strip()
+        if key:
+            save_api_key(key)
+            console.print("[bold green][+] Key saved successfully.[/bold green]\n")
+            return key
+        console.print("[red][-] Key cannot be empty. Please enter a valid API key.[/red]")
+
+def save_api_key(api_key: str):
+    config_data = {"gemini_api_key": api_key}
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config_data, f, indent=2)
+    os.chmod(CONFIG_PATH, 0o600)
+
+class TreeConsole:
+    def __init__(self):
+        self.target = None
+        self.last_results = None
+        self.discovered_hosts = []
+        self.api_key = load_or_prompt_api_key()
+        self.ai = None
+        try:
+            self.ai = AIEngine(api_key=self.api_key)
+        except Exception as e:
+            console.print(f"[red][!] Error initializing AI Engine: {e}[/red]")
+
+    def print_help(self):
+        table = Table(title="Available Commands", border_style="green")
+        table.add_column("Command", style="cyan", no_wrap=True)
+        table.add_column("Description")
+        table.add_row("netscan", "Auto-detect and scan local connected network for live devices")
+        table.add_row("select <id>", "Select a discovered device from netscan as the target")
+        table.add_row("set target <ip/host>", "Manually configure active target")
+        table.add_row("set api_key <key>", "Update and save a new Gemini API key")
+        table.add_row("show options", "Display current target & settings")
+        table.add_row("scan", "Execute port scan and service enumeration on target")
+        table.add_row("analyze", "Run Gemini AI vulnerability triage on scan data")
+        table.add_row("report", "Display the latest AI audit report")
+	table.add_row("export [filename.pdf]", "Export the latest audit report to a highlighted PDF")
+        table.add_row("clear", "Clear terminal screen")
+        table.add_row("exit / quit", "Exit the Tree console")
+        console.print(table)
+
+    def run(self):
+        console.print(BANNER)
+        console.print("[bold green][*][/bold green] Tree initialized. Type [cyan]help[/cyan] to get started.\n")
+
+        while True:
+            try:
+                prompt_str = f"[bold green]tree[/bold green] ({self.target if self.target else 'no target'}) > "
+                command = console.input(prompt_str).strip()
+
+                if not command:
+                    continue
+
+                parts = command.split()
+                cmd = parts[0].lower()
+
+                if cmd in ["exit", "quit"]:
+                    console.print("[green][*] Shutting down Tree console.[/green]")
+                    break
+
+                elif cmd == "help":
+                    self.print_help()
+
+                elif cmd == "clear":
+                    os.system("clear" if os.name == "posix" else "cls")
+                    console.print(BANNER)
+
+                elif cmd == "netscan":
+                    iface, cidr = LocalNetworkScanner.get_local_subnet()
+                    if not cidr:
+                        console.print("[red][-] Could not identify an active local network interface.[/red]")
+                        continue
+
+                    console.print(f"[bold green][*] Detected interface:[/bold green] [cyan]{iface}[/cyan] [bold green]Subnet:[/bold green] [cyan]{cidr}[/cyan]")
+                    
+                    with console.status(f"[bold green]Scanning subnet {cidr} for live devices...[/bold green]"):
+                        self.discovered_hosts = LocalNetworkScanner.discover_hosts(cidr)
+
+                    if not self.discovered_hosts:
+                        console.print("[yellow][!] No active hosts responded on this subnet.[/yellow]")
+                        continue
+
+                    table = Table(title=f"Discovered Devices ({len(self.discovered_hosts)} hosts online)", border_style="green")
+                    table.add_column("ID", style="bold cyan", justify="center")
+                    table.add_column("IP Address", style="yellow")
+                    table.add_column("MAC Address", style="white")
+                    table.add_column("Vendor / Device Info", style="magenta")
+                    table.add_column("Hostname", style="dim")
+
+                    for idx, host in enumerate(self.discovered_hosts):
+                        table.add_row(
+                            str(idx),
+                            host["ip"],
+                            host["mac"],
+                            host["vendor"],
+                            host["hostname"]
+                        )
+                    console.print(table)
+                    console.print("[dim]Use [bold cyan]select <ID>[/bold cyan] to set any discovered device as your target.[/dim]\n")
+
+                elif cmd == "select" and len(parts) >= 2:
+                    try:
+                        idx = int(parts[1])
+                        if 0 <= idx < len(self.discovered_hosts):
+                            self.target = self.discovered_hosts[idx]["ip"]
+                            console.print(f"[green][+] Target switched to device #{idx}:[/green] [bold]{self.target}[/bold] ({self.discovered_hosts[idx]['vendor']})")
+                        else:
+                            console.print(f"[red][-] Invalid ID. Please pick a number from 0 to {len(self.discovered_hosts) - 1}.[/red]")
+                    except ValueError:
+                        console.print("[red][-] Please provide a numerical index, e.g. 'select 0'[/red]")
+
+                elif cmd == "set" and len(parts) >= 3:
+                    sub_opt = parts[1].lower()
+                    if sub_opt == "target":
+                        self.target = parts[2]
+                        console.print(f"[green][+] Target set to:[/green] [bold]{self.target}[/bold]")
+                    elif sub_opt == "api_key":
+                        new_key = parts[2]
+                        save_api_key(new_key)
+                        self.api_key = new_key
+                        self.ai = AIEngine(api_key=self.api_key)
+                        console.print("[green][+] API key updated and saved.[/green]")
+                    else:
+                        console.print(f"[red][-] Unknown option: {parts[1]}[/red]")
+
+                elif cmd == "show" and len(parts) >= 2 and parts[1].lower() == "options":
+                    t = Table(title="Current Configuration")
+                    t.add_column("Option", style="cyan")
+                    t.add_column("Value", style="bold")
+                    t.add_row("TARGET", self.target or "None")
+                    masked_key = (self.api_key[:6] + "..." + self.api_key[-4:]) if len(self.api_key) > 10 else "Configured"
+                    t.add_row("API_KEY", masked_key)
+                    t.add_row("AI_MODEL", "gemini-3.6-flash")
+                    console.print(t)
+
+                elif cmd == "scan":
+                    if not self.target:
+                        console.print("[red][-] Error: No target configured. Use 'set target <ip>' or run 'netscan'[/red]")
+                        continue
+                    
+                    with console.status(f"[bold green]Scanning {self.target}...[/bold green]"):
+                        scanner = ReconScanner(self.target)
+                        self.last_results = scanner.run_all()
+
+                    console.print(f"[green][+] Scan complete for {self.target}![/green]")
+                    
+                    if self.last_results.get("nmap_services"):
+                        st = Table(title=f"Detected Services on {self.target}")
+                        st.add_column("Port", style="cyan")
+                        st.add_column("Service", style="yellow")
+                        st.add_column("Product / Version", style="white")
+                        for s in self.last_results["nmap_services"]:
+                            st.add_row(str(s.get("port")), str(s.get("name")), f"{s.get('product', '')} {s.get('version', '')}")
+                        console.print(st)
+                    else:
+                        console.print(f"[yellow][!] Open ports found:[/yellow] {self.last_results.get('ports')}")
+
+                elif cmd == "analyze":
+                    if not self.last_results:
+                        console.print("[red][-] No scan data available. Run 'scan' first.[/red]")
+                        continue
+                    if not self.ai:
+                        console.print("[red][-] AI engine is not configured properly.[/red]")
+                        continue
+
+                    with console.status("[bold green]Querying Gemini for vulnerability triage and threat modeling...[/bold green]"):
+                        try:
+                            report = self.ai.analyze_recon(self.last_results)
+                            self.latest_report = report
+                            console.print("\n")
+                            console.print(Panel(Markdown(report), title=f"[bold green]AI Security Audit - {self.target}[/bold green]", border_style="green"))
+                        except Exception as e:
+                            console.print(f"[red][-] API Error: {str(e)}[/red]")
+
+                elif cmd == "report":
+                    if hasattr(self, "latest_report") and self.latest_report:
+                        console.print(Panel(Markdown(self.latest_report), title="Saved Report", border_style="green"))
+                    else:
+                        console.print("[yellow][-] No report generated yet. Run 'analyze' first.[/yellow]")
+
+                else:
+                    console.print(f"[red][-] Unknown command: {command}. Type 'help' for available commands.[/red]")
+
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[green][*] Interrupted. Type exit to quit.[/green]")
+                continue
+
+if __name__ == "__main__":
+    app = TreeConsole()
+    app.run()

@@ -1,0 +1,6 @@
+google-genai
+python-nmap
+rich
+prompt_toolkit
+requests
+

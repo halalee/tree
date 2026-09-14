@@ -1,0 +1,19 @@
+# API Keys & Local Configs
+.tree_config.json
+*.json
+
+# Generated Reports
+*.pdf
+report*.pdf
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments & IDEs
+.venv/
+env/
+.vscode/
+.idea/
+
