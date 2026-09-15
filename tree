@@ -2,11 +2,13 @@
 import sys
 import os
 import json
+import time
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
 
 CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
@@ -53,7 +55,7 @@ def load_or_prompt_api_key() -> str:
             save_api_key(key)
             console.print("[bold green][+] Key saved successfully.[/bold green]\n")
             return key
-        console.print("[red][-] Key cannot be empty. Please enter a valid API key.[/red]")
+        console.print("[red][-] Key cannot be empty.[/red]")
 
 def save_api_key(api_key: str):
     config_data = {"gemini_api_key": api_key}
@@ -65,6 +67,7 @@ class TreeConsole:
     def __init__(self):
         self.target = None
         self.last_results = None
+        self.latest_report = None
         self.discovered_hosts = []
         self.api_key = load_or_prompt_api_key()
         self.ai = None
@@ -77,16 +80,16 @@ class TreeConsole:
         table = Table(title="Available Commands", border_style="green")
         table.add_column("Command", style="cyan", no_wrap=True)
         table.add_column("Description")
-        table.add_row("netscan", "Auto-detect and scan local connected network for live devices")
-        table.add_row("select <id>", "Select a discovered device from netscan as the target")
-        table.add_row("set target <ip/host>", "Manually configure active target")
+        table.add_row("netscan", "Scan local connected subnet with visual ARP progress")
+        table.add_row("select <id>", "Select a discovered device ID as active target")
+        table.add_row("set target <ip/host>", "Manually configure target IP or hostname")
         table.add_row("set api_key <key>", "Update and save a new Gemini API key")
-        table.add_row("show options", "Display current target & settings")
-        table.add_row("scan", "Execute port scan and service enumeration on target")
-        table.add_row("analyze", "Run Gemini AI vulnerability triage on scan data")
-        table.add_row("report", "Display the latest AI audit report")
-        table.add_row("export [filename.pdf]", "Export the latest audit report to a highlighted PDF")
-        table.add_row("clear", "Clear terminal screen")
+        table.add_row("show options", "Display current configuration")
+        table.add_row("scan", "Execute reconnaissance pipeline with step-by-step progress bar")
+        table.add_row("analyze", "Stream Gemini AI vulnerability triage with immediate output")
+        table.add_row("report", "Display the latest generated audit report")
+        table.add_row("export [filename.pdf]", "Export the latest report to a color-styled PDF")
+        table.add_row("clear", "Clear the terminal screen")
         table.add_row("exit / quit", "Exit the Tree console")
         console.print(table)
 
@@ -122,10 +125,19 @@ class TreeConsole:
                         console.print("[red][-] Could not identify an active local network interface.[/red]")
                         continue
 
-                    console.print(f"[bold green][*] Detected interface:[/bold green] [cyan]{iface}[/cyan] [bold green]Subnet:[/bold green] [cyan]{cidr}[/cyan]")
+                    console.print(f"[bold green][*] Interface:[/bold green] [cyan]{iface}[/cyan] [bold green]| Subnet:[/bold green] [cyan]{cidr}[/cyan]")
                     
-                    with console.status(f"[bold green]Scanning subnet {cidr} for live devices...[/bold green]"):
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(bar_width=35, style="green"),
+                        TimeRemainingColumn(),
+                        console=console
+                    ) as progress:
+                        t = progress.add_task("[green]Sweeping local subnet for live hosts...", total=100)
+                        progress.update(t, advance=30)
                         self.discovered_hosts = LocalNetworkScanner.discover_hosts(cidr)
+                        progress.update(t, completed=100)
 
                     if not self.discovered_hosts:
                         console.print("[yellow][!] No active hosts responded on this subnet.[/yellow]")
@@ -139,24 +151,18 @@ class TreeConsole:
                     table.add_column("Hostname", style="dim")
 
                     for idx, host in enumerate(self.discovered_hosts):
-                        table.add_row(
-                            str(idx),
-                            host["ip"],
-                            host["mac"],
-                            host["vendor"],
-                            host["hostname"]
-                        )
+                        table.add_row(str(idx), host["ip"], host["mac"], host["vendor"], host["hostname"])
                     console.print(table)
-                    console.print("[dim]Use [bold cyan]select <ID>[/bold cyan] to set any discovered device as your target.[/dim]\n")
+                    console.print("[dim]Use [bold cyan]select <ID>[/bold cyan] to set an active target.[/dim]\n")
 
                 elif cmd == "select" and len(parts) >= 2:
                     try:
                         idx = int(parts[1])
                         if 0 <= idx < len(self.discovered_hosts):
                             self.target = self.discovered_hosts[idx]["ip"]
-                            console.print(f"[green][+] Target switched to device #{idx}:[/green] [bold]{self.target}[/bold] ({self.discovered_hosts[idx]['vendor']})")
+                            console.print(f"[green][+] Target set to device #{idx}:[/green] [bold]{self.target}[/bold] ({self.discovered_hosts[idx]['vendor']})")
                         else:
-                            console.print(f"[red][-] Invalid ID. Please pick a number from 0 to {len(self.discovered_hosts) - 1}.[/red]")
+                            console.print(f"[red][-] Invalid ID. Choose between 0 and {len(self.discovered_hosts) - 1}.[/red]")
                     except ValueError:
                         console.print("[red][-] Please provide a numerical index, e.g. 'select 0'[/red]")
 
@@ -186,25 +192,84 @@ class TreeConsole:
 
                 elif cmd == "scan":
                     if not self.target:
-                        console.print("[red][-] Error: No target configured. Use 'set target <ip>' or run 'netscan'[/red]")
+                        console.print("[red][-] Error: No target configured. Use 'set target <ip>' or 'select <id>'[/red]")
                         continue
-                    
-                    with console.status(f"[bold green]Scanning {self.target}...[/bold green]"):
-                        scanner = ReconScanner(self.target)
-                        self.last_results = scanner.run_all()
 
-                    console.print(f"[green][+] Scan complete for {self.target}![/green]")
-                    
+                    scanner = ReconScanner(self.target)
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(bar_width=35, style="cyan"),
+                        console=console
+                    ) as progress:
+                        p_task = progress.add_task(f"[cyan]Reconnaissance on {self.target}...", total=3)
+
+                        progress.update(p_task, description="[cyan]1/3 Fast TCP port sweep...")
+                        scanner.quick_port_scan()
+                        progress.advance(p_task, 1)
+
+                        progress.update(p_task, description="[cyan]2/3 Service banners & version detection (Nmap)...")
+                        scanner.scan_nmap()
+                        progress.advance(p_task, 1)
+
+                        progress.update(p_task, description="[cyan]3/3 Running Exploit-DB, SSH, and Web audits...")
+                        # Run audits on the gathered services without restarting nmap
+                        for svc in scanner.results["nmap_services"]:
+                            if "error" in svc:
+                                continue
+                            port = svc.get("port")
+                            name = svc.get("name", "").lower()
+                            product = svc.get("product", "")
+                            ver = svc.get("version", "")
+                            banner_str = f"{product} {ver}".strip()
+
+                            from core.scanner import ExploitDBCorrelator, ServiceAuditor, WebAuditor
+                            search_term = product if product else name
+                            matches = ExploitDBCorrelator.query(search_term, ver)
+                            if matches:
+                                scanner.results["exploitdb_matches"].append({
+                                    "port": port,
+                                    "service": f"{search_term} {ver}".strip(),
+                                    "exploits": matches
+                                })
+
+                            if "ftp" in name or port == 21:
+                                scanner.results["service_audits"]["ftp"] = ServiceAuditor.check_ftp_anonymous(scanner.target, port)
+
+                            if "ssh" in name or port == 22:
+                                ssh_banner = f"{product}_{ver}" if product else banner_str
+                                scanner.results["service_audits"]["ssh"] = ServiceAuditor.audit_ssh_cves(ssh_banner)
+
+                            if port in [80, 443, 8080, 8443] or "http" in name:
+                                auditor = WebAuditor(scanner.target, port)
+                                scanner.results["web_audits"].append({
+                                    "port": port,
+                                    "audit": auditor.audit()
+                                })
+                        progress.advance(p_task, 1)
+
+                    self.last_results = scanner.results
+                    console.print(f"\n[bold green][+] Reconnaissance completed for {self.target}![/bold green]")
+
                     if self.last_results.get("nmap_services"):
                         st = Table(title=f"Detected Services on {self.target}")
                         st.add_column("Port", style="cyan")
                         st.add_column("Service", style="yellow")
                         st.add_column("Product / Version", style="white")
                         for s in self.last_results["nmap_services"]:
-                            st.add_row(str(s.get("port")), str(s.get("name")), f"{s.get('product', '')} {s.get('version', '')}")
+                            if "error" not in s:
+                                st.add_row(str(s.get("port")), str(s.get("name")), f"{s.get('product', '')} {s.get('version', '')}")
                         console.print(st)
-                    else:
-                        console.print(f"[yellow][!] Open ports found:[/yellow] {self.last_results.get('ports')}")
+
+                    if self.last_results.get("exploitdb_matches"):
+                        et = Table(title="Local Exploit-DB Matches", border_style="red")
+                        et.add_column("Port", style="cyan")
+                        et.add_column("Service", style="yellow")
+                        et.add_column("Exploit Title", style="white")
+                        for match in self.last_results["exploitdb_matches"]:
+                            for exp in match["exploits"]:
+                                et.add_row(str(match["port"]), match["service"], exp["title"])
+                        console.print(et)
 
                 elif cmd == "analyze":
                     if not self.last_results:
@@ -214,44 +279,64 @@ class TreeConsole:
                         console.print("[red][-] AI engine is not configured properly.[/red]")
                         continue
 
-                    with console.status("[bold green]Querying Gemini for vulnerability triage and threat modeling...[/bold green]"):
-                        try:
-                            report = self.ai.analyze_recon(self.last_results)
-                            self.latest_report = report
-                            console.print("\n")
-                            console.print(Panel(Markdown(report), title=f"[bold green]AI Security Audit - {self.target}[/bold green]", border_style="green"))
-                        except Exception as e:
-                            console.print(f"[red][-] API Error: {str(e)}[/red]")
-                
+                    console.print(f"[bold green][*] Starting analysis for target:[/bold green] [cyan]{self.target}[/cyan]")
+
+                    def verbose_logger(msg: str):
+                        console.print(f"  {msg}")
+
+                    full_report = []
+                    try:
+                        console.print(f"\n[bold green]═══ AI Security Audit Stream ({self.target}) ═══[/bold green]\n")
+                        for chunk in self.ai.stream_analyze_recon(self.last_results, verbose_callback=verbose_logger):
+                            console.print(chunk, end="", highlight=False)
+                            sys.stdout.flush()
+                            full_report.append(chunk)
+
+                        self.latest_report = "".join(full_report)
+                        console.print("\n\n[bold green][+] Analysis complete. Ready to 'export report.pdf'[/bold green]\n")
+
+                    except requests.exceptions.Timeout:
+                        console.print("\n[red][-] Connection timed out. Check network connection or try another model.[/red]")
+                    except Exception as e:
+                        console.print(f"\n[red][-] Error during analysis: {str(e)}[/red]")
+
+                elif cmd == "report":
+                    if self.latest_report:
+                        console.print(Panel(Markdown(self.latest_report), title="Saved Report", border_style="green"))
+                    else:
+                        console.print("[yellow][-] No report generated yet. Run 'analyze' first.[/yellow]")
+
                 elif cmd == "export":
-                    if not hasattr(self, "latest_report") or not self.latest_report:
+                    if not self.latest_report:
                         console.print("[yellow][-] No report to export. Run 'analyze' first.[/yellow]")
                         continue
 
-                    # Choose custom filename or generate default
                     filename = parts[1] if len(parts) >= 2 else f"report_{self.target.replace('.', '_')}.pdf"
                     if not filename.endswith(".pdf"):
                         filename += ".pdf"
 
                     export_path = os.path.join(os.getcwd(), filename)
-                    with console.status(f"[bold green]Rendering PDF report to {filename}...[/bold green]"):
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(bar_width=35, style="green"),
+                        console=console
+                    ) as progress:
+                        t = progress.add_task(f"[green]Compiling styled PDF ({filename})...", total=100)
+                        progress.update(t, advance=50)
                         success = generate_pdf_report(self.latest_report, self.target, export_path)
+                        progress.update(t, completed=100)
 
                     if success:
                         console.print(f"[bold green][+] Color-highlighted PDF report saved to:[/bold green] [cyan]{export_path}[/cyan]")
                     else:
-                        console.print(f"[red][-] Failed to generate PDF report.[/red]")
-                elif cmd == "report":
-                    if hasattr(self, "latest_report") and self.latest_report:
-                        console.print(Panel(Markdown(self.latest_report), title="Saved Report", border_style="green"))
-                    else:
-                        console.print("[yellow][-] No report generated yet. Run 'analyze' first.[/yellow]")
+                        console.print("[red][-] Failed to generate PDF report.[/red]")
 
                 else:
-                    console.print(f"[red][-] Unknown command: {command}. Type 'help' for available commands.[/red]")
+                    console.print(f"[red][-] Unknown command: '{command}'. Type 'help' for available commands.[/red]")
 
             except (KeyboardInterrupt, EOFError):
-                console.print("\n[green][*] Interrupted. Type exit to quit.[/green]")
+                console.print("\n[green][*] Interrupted. Type 'exit' to quit.[/green]")
                 continue
 
 if __name__ == "__main__":

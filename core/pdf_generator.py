@@ -1,152 +1,44 @@
-import datetime
-from xhtml2pdf import pisa
-import markdown
+import re
 
-CSS_STYLES = """
-@page {
-    size: a4 portrait;
-    margin: 20mm 15mm 20mm 15mm;
-}
-
-body {
-    font-family: Helvetica, Arial, sans-serif;
-    color: #2b2b2b;
-    font-size: 10pt;
-    line-height: 1.45;
-}
-
-.header-banner {
-    background-color: #0d1117;
-    padding: 16px;
-    border-radius: 4px;
-    margin-bottom: 20px;
-    border-left: 6px solid #2ea043;
-}
-
-.header-title {
-    color: #ffffff;
-    font-size: 18pt;
-    font-weight: bold;
-    margin: 0;
-}
-
-.header-subtitle {
-    color: #8b949e;
-    font-size: 9.5pt;
-    margin-top: 4px;
-}
-
-.meta-box {
-    background-color: #f6f8fa;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
-    padding: 8px 12px;
-    margin-bottom: 20px;
-}
-
-h1 {
-    color: #0d1117;
-    font-size: 14pt;
-    font-weight: bold;
-    border-bottom: 2px solid #2ea043;
-    padding-bottom: 3px;
-    margin-top: 18px;
-    margin-bottom: 8px;
-}
-
-h2 {
-    color: #0d1117;
-    font-size: 12pt;
-    font-weight: bold;
-    border-bottom: 1px solid #d0d7de;
-    padding-bottom: 2px;
-    margin-top: 14px;
-    margin-bottom: 6px;
-}
-
-h3 {
-    color: #1f2328;
-    font-size: 10.5pt;
-    font-weight: bold;
-    margin-top: 10px;
-}
-
-p, li {
-    font-size: 9.5pt;
-    color: #24292f;
-}
-
-ul, ol {
-    margin-left: 15px;
-    margin-bottom: 10px;
-}
-
-code {
-    background-color: #eff1f3;
-    font-family: Courier, monospace;
-    font-size: 8.5pt;
-    color: #cf222e;
-}
-
-pre {
-    background-color: #161b22;
-    color: #58a6ff;
-    padding: 8px;
-    font-family: Courier, monospace;
-    font-size: 8pt;
-    border-radius: 4px;
-    margin-bottom: 12px;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12px 0;
-}
-
-th {
-    background-color: #21262d;
-    color: #ffffff;
-    font-size: 8.5pt;
-    padding: 5px;
-    text-align: left;
-    border: 1px solid #30363d;
-}
-
-td {
-    font-size: 8.5pt;
-    padding: 5px;
-    border: 1px solid #d0d7de;
-}
-
-/* Color Badges */
-.badge-critical {
-    background-color: #d73a49;
-    color: #ffffff;
-    font-weight: bold;
-}
-.badge-high {
-    background-color: #f66a0a;
-    color: #ffffff;
-    font-weight: bold;
-}
-.badge-medium {
-    background-color: #e3b341;
-    color: #1f2328;
-    font-weight: bold;
-}
-.badge-low {
-    background-color: #2da44e;
-    color: #ffffff;
-    font-weight: bold;
-}
-"""
+def clean_unicode_for_pdf(text: str) -> str:
+    """Replaces Unicode punctuation and symbols with PDF-safe equivalents."""
+    replacements = {
+        "\u2014": "--",       # Em dash
+        "\u2013": "-",        # En dash
+        "\u2018": "'",        # Left single quote
+        "\u2019": "'",        # Right single quote
+        "\u201c": '"',        # Left double quote
+        "\u201d": '"',        # Right double quote
+        "\u2022": "*",        # Bullet point
+        "\u2026": "...",      # Ellipsis
+        "\u2192": "->",       # Right arrow
+        "\u2190": "<-",       # Left arrow
+        "\u2713": "[OK]",     # Check mark
+        "\u2714": "[OK]",     # Heavy check mark
+        "\u2717": "[X]",      # Cross mark
+        "\u2718": "[X]",      # Heavy cross mark
+        "\u25cf": "*",        # Black circle
+        "\u25cb": "o",        # White circle
+        "\u25aa": "-",        # Black small square
+        "\u25ab": "-",        # White small square
+        "\u00a0": " ",        # Non-breaking space
+    }
+    for char, safe_char in replacements.items():
+        text = text.replace(char, safe_char)
+    
+    # Strip any remaining unprintable or multi-byte unicode emojis that Helvetica cannot render
+    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    return text
 
 def generate_pdf_report(markdown_text: str, target: str, output_path: str) -> bool:
-    """Converts markdown audit report to a color-highlighted PDF."""
-    html_content = markdown.markdown(markdown_text, extensions=['tables', 'fenced_code'])
+    """Converts the Markdown report into a clean, color-styled PDF without encoding artifacts."""
+    # 1. Clean unicode symbols that break default PDF fonts
+    safe_markdown = clean_unicode_for_pdf(markdown_text)
 
-    # Style severity badges
+    # 2. Convert to HTML
+    html_content = markdown.markdown(safe_markdown, extensions=['tables', 'fenced_code'])
+
+    # 3. Inject risk badges
     html_content = html_content.replace("Critical", '<span class="badge-critical">&nbsp;CRITICAL&nbsp;</span>')
     html_content = html_content.replace("High", '<span class="badge-high">&nbsp;HIGH&nbsp;</span>')
     html_content = html_content.replace("Medium", '<span class="badge-medium">&nbsp;MEDIUM&nbsp;</span>')
@@ -157,7 +49,7 @@ def generate_pdf_report(markdown_text: str, target: str, output_path: str) -> bo
     full_html = f"""<!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style>
 {CSS_STYLES}
 </style>
@@ -182,6 +74,6 @@ def generate_pdf_report(markdown_text: str, target: str, output_path: str) -> bo
 """
 
     with open(output_path, "wb") as pdf_file:
-        pisa_status = pisa.CreatePDF(full_html, dest=pdf_file)
+        pisa_status = pisa.CreatePDF(full_html, dest=pdf_file, encoding='utf-8')
 
     return not pisa_status.err
