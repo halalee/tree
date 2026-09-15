@@ -1,42 +1,96 @@
 #!/usr/bin/env bash
 set -e
 
-# TREE Framework Installer for Kali Linux
-# Ensures all system packages, exploit-db databases, and Python libraries are configured.
+# ==========================================================
+# TREE Framework - Automated Installer
+# Handles dependency checks, overrides PEP 668, sets up symlinks
+# ==========================================================
+
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+BLUE="\033[0;34m"
+YELLOW="\033[1;33m"
+NC="\033[0m"
 
 if [ "$EUID" -ne 0 ]; then
-  echo -e "\033[0;31m[-] Please run install.sh with sudo / root privileges.\033[0m"
+  echo -e "${RED}[-] Please run install.sh with sudo or as root.${NC}"
   exit 1
 fi
 
-echo -e "\033[0;32m[*] Updating package lists and installing core dependencies...\033[0m"
-apt-get update -y
-apt-get install -y \
-  nmap \
-  netdiscover \
-  exploitdb \
-  python3 \
-  python3-pip \
-  python3-bs4 \
-  python3-markdown \
-  python3-nmap \
-  python3-requests
-
-echo -e "\033[0;32m[*] Installing Python dependencies...\033[0m"
-pip install -r requirements.txt --break-system-packages
-
-echo -e "\033[0;32m[*] Setting up binary symlink...\033[0m"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-chmod +x "$SCRIPT_DIR/tree"
-ln -sf "$SCRIPT_DIR/tree" /usr/local/bin/tree-sec
-ln -sf "$SCRIPT_DIR/tree" /usr/bin/tree-sec
 
-echo -e "\033[0;32m[*] Checking IPv6 / DNS resolver configuration...\033[0m"
-# Ensure IPv4 precedence to prevent Google API timeouts
-if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
-  echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
-  echo -e "\033[0;34m[+] Configured IPv4 precedence in /etc/gai.conf\033[0m"
+# Check if already installed
+if command -v tree-sec &>/dev/null && [ -f "/usr/local/bin/tree-sec" ]; then
+    echo -e "${YELLOW}[*] Existing TREE installation detected.${NC}"
+    echo -e "${BLUE}[*] Updating core files and verifying dependencies...${NC}"
+else
+    echo -e "${GREEN}[*] Performing fresh installation of TREE framework...${NC}"
 fi
 
-echo -e "\033[0;32m[+] Installation completed successfully!\033[0m"
-echo -e "\033[0;36m[*] Run 'sudo tree-sec' from anywhere to launch the console.\033[0m"
+# 1. System Packages (Check before installing)
+echo -e "${BLUE}[*] Checking system packages...${NC}"
+REQUIRED_SYS_PKGS=(nmap netdiscover exploitdb python3 python3-pip)
+MISSING_SYS_PKGS=()
+
+for pkg in "${REQUIRED_SYS_PKGS[@]}"; do
+    if ! dpkg -s "$pkg" &>/dev/null; then
+        MISSING_SYS_PKGS+=("$pkg")
+    fi
+done
+
+if [ ${#MISSING_SYS_PKGS[@]} -gt 0 ]; then
+    echo -e "${YELLOW}[*] Installing missing system packages: ${MISSING_SYS_PKGS[*]}...${NC}"
+    apt-get update -y
+    apt-get install -y "${MISSING_SYS_PKGS[@]}"
+else
+    echo -e "${GREEN}[+] All required system packages are present.${NC}"
+fi
+
+# 2. Python Packages (Bypass PEP 668 externally-managed environment if OS resists)
+echo -e "${BLUE}[*] Checking Python dependencies...${NC}"
+if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+    # --break-system-packages overrides Debian 12 / Kali externally managed blocks
+    # --ignore-installed ensures broken or partial packages are replaced cleanly
+    python3 -m pip install -r "$SCRIPT_DIR/requirements.txt" \
+        --break-system-packages \
+        --ignore-installed \
+        --no-warn-script-location || {
+            echo -e "${YELLOW}[!] Retrying with forced user installation...${NC}"
+            python3 -m pip install -r "$SCRIPT_DIR/requirements.txt" \
+                --break-system-packages \
+                --force-reinstall
+        }
+    echo -e "${GREEN}[+] Python dependencies verified and installed.${NC}"
+fi
+
+# 3. Global Command Setup (Creates an executable wrapper in system PATH)
+echo -e "${BLUE}[*] Configuring 'tree-sec' system command...${NC}"
+chmod +x "$SCRIPT_DIR/tree"
+
+cat << 'EOF' > /usr/local/bin/tree-sec
+#!/usr/bin/env bash
+INSTALL_DIR="$(dirname "$(readlink -f "$0")")"
+# If installed via standard symlink or wrapper
+TARGET_SCRIPT="/home/kali/tree-framework/tree"
+if [ ! -f "$TARGET_SCRIPT" ]; then
+    TARGET_SCRIPT="$(find / -name "tree" -path "*/tree-framework/tree" 2>/dev/null | head -n 1)"
+fi
+
+exec python3 "$TARGET_SCRIPT" "$@"
+EOF
+
+# Ensure secondary fallback symlink in /usr/bin
+chmod +x /usr/local/bin/tree-sec
+ln -sf /usr/local/bin/tree-sec /usr/bin/tree-sec
+
+# 4. Network & DNS Tuning (Enforce IPv4 priority to prevent API timeouts)
+if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
+    echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
+    echo -e "${GREEN}[+] Set IPv4 precedence in /etc/gai.conf${NC}"
+fi
+
+echo -e "\n${GREEN}====================================================${NC}"
+echo -e "${GREEN}[+] Setup Complete!${NC}"
+echo -e "${BLUE}[*] You can now run the tool from anywhere using:${NC}"
+echo -e "    ${YELLOW}sudo tree-sec${NC}"
+echo -e "${GREEN}====================================================${NC}\n"
