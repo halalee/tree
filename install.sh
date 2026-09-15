@@ -1,63 +1,42 @@
 #!/usr/bin/env bash
-
-# TREE Framework - Automated Installer
-# Target OS: Debian / Ubuntu / Kali Linux
-
 set -e
 
-# ANSI Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# TREE Framework Installer for Kali Linux
+# Ensures all system packages, exploit-db databases, and Python libraries are configured.
 
-echo -e "${BLUE}"
-echo "======================================================"
-echo "          TREE Framework - Automated Installer         "
-echo "======================================================"
-echo -e "${NC}"
-
-# Check for root / sudo permissions
 if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}[-] Please run the installer with sudo: sudo ./install.sh${NC}"
-    exit 1
+  echo -e "\033[0;31m[-] Please run install.sh with sudo / root privileges.\033[0m"
+  exit 1
 fi
 
-INSTALL_DIR="/opt/tree-framework"
-BIN_TARGET="/usr/bin/tree-sec"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo -e "${BLUE}[*] Updating package index...${NC}"
+echo -e "\033[0;32m[*] Updating package lists and installing core dependencies...\033[0m"
 apt-get update -y
+apt-get install -y \
+  nmap \
+  netdiscover \
+  exploitdb \
+  python3 \
+  python3-pip \
+  python3-bs4 \
+  python3-markdown \
+  python3-nmap \
+  python3-requests
 
-echo -e "${BLUE}[*] Installing system dependencies (nmap, netdiscover, python3)...${NC}"
-apt-get install -y nmap netdiscover python3 python3-pip python3-venv python3-cryptography python3-cffi python3-markdown
+echo -e "\033[0;32m[*] Installing Python dependencies...\033[0m"
+pip install -r requirements.txt --break-system-packages
 
-echo -e "${BLUE}[*] Installing Python libraries...${NC}"
-pip3 install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages
+echo -e "\033[0;32m[*] Setting up binary symlink...\033[0m"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+chmod +x "$SCRIPT_DIR/tree"
+ln -sf "$SCRIPT_DIR/tree" /usr/local/bin/tree-sec
+ln -sf "$SCRIPT_DIR/tree" /usr/bin/tree-sec
 
-echo -e "${BLUE}[*] Setting up framework directory in ${INSTALL_DIR}...${NC}"
-mkdir -p "$INSTALL_DIR"
-cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/tree"
-
-echo -e "${BLUE}[*] Creating global system symlinks...${NC}"
-# Primary safe command
-ln -sf "$INSTALL_DIR/tree" "$BIN_TARGET"
-
-# Optional: Link to 'tree' if user wants it, backing up original /usr/bin/tree if present
-if [ -f /usr/bin/tree ] && [ ! -L /usr/bin/tree ]; then
-    echo -e "${YELLOW}[!] Existing /usr/bin/tree directory tool detected. Backing it up to /usr/bin/tree.orig...${NC}"
-    mv /usr/bin/tree /usr/bin/tree.orig
+echo -e "\033[0;32m[*] Checking IPv6 / DNS resolver configuration...\033[0m"
+# Ensure IPv4 precedence to prevent Google API timeouts
+if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
+  echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
+  echo -e "\033[0;34m[+] Configured IPv4 precedence in /etc/gai.conf\033[0m"
 fi
-ln -sf "$INSTALL_DIR/tree" /usr/bin/tree
 
-echo -e "${GREEN}"
-echo "======================================================"
-echo "          Installation Completed Successfully!        "
-echo "======================================================"
-echo -e "${NC}"
-echo -e "You can now run the tool from anywhere using either:"
-echo -e "  ${YELLOW}sudo tree-sec${NC}  or  ${YELLOW}sudo tree${NC}"
-echo ""
+echo -e "\033[0;32m[+] Installation completed successfully!\033[0m"
+echo -e "\033[0;36m[*] Run 'sudo tree-sec' from anywhere to launch the console.\033[0m"
