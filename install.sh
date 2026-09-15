@@ -63,26 +63,17 @@ if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
     echo -e "${GREEN}[+] Python dependencies verified and installed.${NC}"
 fi
 
-# 3. Global Command Setup (Creates an executable wrapper in system PATH)
+# 3. Global Command Setup
 echo -e "${BLUE}[*] Configuring 'tree-sec' system command...${NC}"
 chmod +x "$SCRIPT_DIR/tree"
 
-cat << 'EOF' > /usr/local/bin/tree-sec
+cat << EOF > /usr/local/bin/tree-sec
 #!/usr/bin/env bash
-INSTALL_DIR="$(dirname "$(readlink -f "$0")")"
-# If installed via standard symlink or wrapper
-TARGET_SCRIPT="/home/kali/tree-framework/tree"
-if [ ! -f "$TARGET_SCRIPT" ]; then
-    TARGET_SCRIPT="$(find / -name "tree" -path "*/tree-framework/tree" 2>/dev/null | head -n 1)"
-fi
-
-exec python3 "$TARGET_SCRIPT" "$@"
+exec python3 "$SCRIPT_DIR/tree" "\$@"
 EOF
 
-# Ensure secondary fallback symlink in /usr/bin
 chmod +x /usr/local/bin/tree-sec
 ln -sf /usr/local/bin/tree-sec /usr/bin/tree-sec
-
 # 4. Network & DNS Tuning (Enforce IPv4 priority to prevent API timeouts)
 if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
     echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
