@@ -362,6 +362,8 @@ do_remove() {
     rm -f /usr/bin/tree-sec
     rm -f /root/.tree_config.json
     rm -f "$HOME/.tree_config.json"
+    cd ..
+    rm -rf tree
 }
 
 # ==========================================================
