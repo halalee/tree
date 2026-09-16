@@ -299,20 +299,29 @@ run_animation() {
 # ==========================================================
 
 do_install() {
-    # 1. Quick check: Only install missing system packages
-    NEEDED_PKGS=()
-    for pkg in nmap netdiscover exploitdb python3 python3-pip python3-bs4 python3-markdown python3-requests; do
-        if ! dpkg -s "$pkg" &>/dev/null; then
-            NEEDED_PKGS+=("$pkg")
-        fi
-    done
+    # 1. System packages (including graphics/fonts needed for WSL environments)
+    WSL_AND_CORE_PKGS=(
+        nmap
+        netdiscover
+        exploitdb
+        python3
+        python3-pip
+        python3-bs4
+        python3-markdown
+        python3-requests
+        build-essential
+        libjpeg-dev
+        zlib1g-dev
+        libfreetype6-dev
+        libcairo2
+        libpango-1.0-0
+        fonts-dejavu-core
+    )
 
-    if [ ${#NEEDED_PKGS[@]} -gt 0 ]; then
-        apt-get update -y >> "$LOG_FILE" 2>&1
-        apt-get install -y --no-install-recommends "${NEEDED_PKGS[@]}" >> "$LOG_FILE" 2>&1
-    fi
+    apt-get update -y >> "$LOG_FILE" 2>&1
+    apt-get install -y --no-install-recommends "${WSL_AND_CORE_PKGS[@]}" >> "$LOG_FILE" 2>&1
 
-    # 2. Fast install of Python packages (skip already-satisfied wheels)
+    # 2. Python packages
     python3 -m pip install \
         "rich>=13.7.0" \
         "beautifulsoup4>=4.12.0" \
@@ -323,7 +332,7 @@ do_install() {
         "google-genai>=0.1.1" \
         --break-system-packages >> "$LOG_FILE" 2>&1 || true
 
-    # 3. Symlinks and wrapper setup
+    # 3. Global wrappers
     chmod +x "$SCRIPT_DIR/tree"
     cat << EOF > /usr/local/bin/tree-sec
 #!/usr/bin/env bash
@@ -332,12 +341,11 @@ EOF
     chmod +x /usr/local/bin/tree-sec
     ln -sf /usr/local/bin/tree-sec /usr/bin/tree-sec
 
-    # 4. Network and DNS IPv4 tuning
+    # 4. Networking precedence
     if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
         echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
     fi
 }
-
 do_update() {
     cd "$SCRIPT_DIR"
     git fetch origin main >> "$LOG_FILE" 2>&1
