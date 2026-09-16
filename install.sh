@@ -406,14 +406,14 @@ case "$CHOICE" in
         ;;
 
     2)
-        # Check if installed
+        # 1. Check if installed
         if [ ! -f "/usr/local/bin/tree-sec" ] && ! command -v tree-sec &>/dev/null; then
             echo -e "\n${RED}[-] TREE is not installed on this system.${NC}"
             echo -e "${YELLOW}[!] Please run install first (Option 1).${NC}\n"
             exit 1
         fi
 
-        echo -e "\n${BLUE}[*] Comparing local repository with origin/main (github.com/halalee/tree)...${NC}"
+        echo -e "\n${BLUE}[*] Checking for updates from origin/main...${NC}"
         cd "$SCRIPT_DIR"
         git fetch origin main >/dev/null 2>&1 || {
             echo -e "${RED}[-] Could not reach GitHub. Check network connectivity.${NC}"
@@ -424,23 +424,44 @@ case "$CHOICE" in
         REMOTE_HASH=$(git rev-parse origin/main)
 
         if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
-            echo -e "${GREEN}[✓] TREE is already up to date with GitHub! (Commit: ${LOCAL_HASH:0:7})${NC}\n"
+            echo -e "${GREEN}[✓] TREE is already up to date! (Commit: ${LOCAL_HASH:0:7})${NC}\n"
             exit 0
         fi
 
-        echo -e "${YELLOW}[*] Changes detected! Syncing with remote repository...${NC}"
+        # 2. Extract and format what came new
+        NEW_COMMITS_COUNT=$(git rev-list --count HEAD..origin/main)
+        echo -e "\n${CYAN}======================================================${NC}"
+        echo -e "${GREEN}${BOLD}             WHAT'S NEW (${NEW_COMMITS_COUNT} Incoming Commits)             ${NC}"
+        echo -e "${CYAN}======================================================${NC}"
+        
+        # Display commit short hash, relative time, and commit message
+        git log --color=always --pretty=format:"  ${YELLOW}%h${NC} - ${GREEN}%s${NC} ${BLUE}(%cr)${NC}" HEAD..origin/main
+        echo ""
+
+        # Display list of changed files with additions/deletions summary
+        echo -e "\n${BOLD}Modified Files:${NC}"
+        git diff --stat --color=always HEAD..origin/main | sed 's/^/  /'
+        echo -e "${CYAN}======================================================${NC}\n"
+
+        read -p "Apply these updates now? [Y/n]: " CONFIRM
+        CONFIRM=${CONFIRM:-Y}
+        if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}[*] Update aborted.${NC}\n"
+            exit 0
+        fi
+
+        # 3. Proceed with grooming background update
         do_update &
         BG_PID=$!
         run_animation "UPDATE" "GROOMING & UPDATING" groom_stage_1 groom_stage_2 groom_stage_3 groom_stage_4
 
         if [ $? -eq 0 ]; then
-            echo -e "${GREEN}[+] TREE has been groomed and updated to latest version!${NC}\n"
+            echo -e "${GREEN}[+] TREE has been groomed and updated to the latest version!${NC}\n"
         else
-            echo -e "${RED}[-] Update failed. Check $LOG_FILE${NC}"
+            echo -e "${RED}[-] Update failed. Check $LOG_FILE for details.${NC}"
             exit 1
         fi
         ;;
-
     3)
         if [ ! -f "/usr/local/bin/tree-sec" ] && ! command -v tree-sec &>/dev/null; then
             echo -e "\n${RED}[-] TREE is not currently installed on this system.${NC}\n"
