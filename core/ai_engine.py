@@ -91,35 +91,60 @@ Format using these exact Markdown sections:
             }
         }
 
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:streamGenerateContent?alt=sse&key={self.api_key}"
+        # Candidate models to try in order of preference
+        candidate_models = [
+            "gemini-flash-latest",
+            "gemini-2.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-2.5-flash"
+        ]
+
         headers = {"Content-Type": "application/json"}
+        last_error = None
 
-        log(f"[bold blue][VERBOSE][/bold blue] Initiating SSE stream to [cyan]{self.model}[/cyan]...")
-        
-        response = requests.post(
-            endpoint,
-            headers=headers,
-            data=json.dumps(payload),
-            stream=True,
-            timeout=(8, 30)
-        )
+        for model in candidate_models:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
+            log(f"[bold blue][VERBOSE][/bold blue] Attempting connection with [cyan]{model}[/cyan]...")
 
-        if response.status_code != 200:
-            raise RuntimeError(f"API Error {response.status_code}: {response.text}")
-
-        for line in response.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data: "):
-                continue
-            
-            data_str = line[6:].strip()
             try:
-                data_json = json.loads(data_str)
-                candidates = data_json.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    for part in parts:
-                        text = part.get("text", "")
-                        if text:
-                            yield text
-            except Exception:
+                response = requests.post(
+                    endpoint,
+                    headers=headers,
+                    data=json.dumps(payload),
+                    stream=True,
+                    timeout=(8, 30)
+                )
+
+                if response.status_code == 200:
+                    self.model = model
+                    for line in response.iter_lines(decode_unicode=True):
+                        if not line or not line.startswith("data: "):
+                            continue
+                        
+                        data_str = line[6:].strip()
+                        try:
+                            data_json = json.loads(data_str)
+                            candidates = data_json.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                for part in parts:
+                                    text = part.get("text", "")
+                                    if text:
+                                        yield text
+                        except Exception:
+                            continue
+                    return
+
+                elif response.status_code in (503, 429, 404):
+                    log(f"[bold yellow][!] {model} returned HTTP {response.status_code} (Capacity/Availability). Trying next candidate...[/bold yellow]")
+                    last_error = f"HTTP {response.status_code}: {response.text}"
+                    continue
+                else:
+                    raise RuntimeError(f"API Error {response.status_code}: {response.text}")
+
+            except requests.exceptions.RequestException as e:
+                log(f"[bold yellow][!] {model} connection error: {e}. Trying fallback...[/bold yellow]")
+                last_error = str(e)
                 continue
+
+        raise RuntimeError(f"All candidate models unavailable. Last error: {last_error}")

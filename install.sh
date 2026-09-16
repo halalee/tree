@@ -299,9 +299,20 @@ run_animation() {
 # ==========================================================
 
 do_install() {
-    apt-get update -y >> "$LOG_FILE" 2>&1
-    apt-get install -y nmap netdiscover exploitdb python3 python3-pip python3-bs4 python3-markdown python3-requests >> "$LOG_FILE" 2>&1
+    # 1. Quick check: Only install missing system packages
+    NEEDED_PKGS=()
+    for pkg in nmap netdiscover exploitdb python3 python3-pip python3-bs4 python3-markdown python3-requests; do
+        if ! dpkg -s "$pkg" &>/dev/null; then
+            NEEDED_PKGS+=("$pkg")
+        fi
+    done
 
+    if [ ${#NEEDED_PKGS[@]} -gt 0 ]; then
+        apt-get update -y >> "$LOG_FILE" 2>&1
+        apt-get install -y --no-install-recommends "${NEEDED_PKGS[@]}" >> "$LOG_FILE" 2>&1
+    fi
+
+    # 2. Fast install of Python packages (skip already-satisfied wheels)
     python3 -m pip install \
         "rich>=13.7.0" \
         "beautifulsoup4>=4.12.0" \
@@ -310,8 +321,9 @@ do_install() {
         "markdown>=3.6" \
         "python-nmap>=0.7.1" \
         "google-genai>=0.1.1" \
-        --break-system-packages --ignore-installed >> "$LOG_FILE" 2>&1 || true
+        --break-system-packages >> "$LOG_FILE" 2>&1 || true
 
+    # 3. Symlinks and wrapper setup
     chmod +x "$SCRIPT_DIR/tree"
     cat << EOF > /usr/local/bin/tree-sec
 #!/usr/bin/env bash
@@ -320,6 +332,7 @@ EOF
     chmod +x /usr/local/bin/tree-sec
     ln -sf /usr/local/bin/tree-sec /usr/bin/tree-sec
 
+    # 4. Network and DNS IPv4 tuning
     if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
         echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
     fi
