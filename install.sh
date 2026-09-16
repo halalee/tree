@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ==========================================================
-# TREE Framework - Automated Stealth Animated Installer
+# TREE Framework - Unified Lifecycle Manager (Install/Update/Remove)
+# Full Terminal Animated Loading Screens
 # ==========================================================
 
-LOG_FILE="/tmp/tree_install.log"
+LOG_FILE="/tmp/tree_lifecycle.log"
 rm -f "$LOG_FILE"
 touch "$LOG_FILE"
 
@@ -14,147 +15,304 @@ BLUE="\033[0;34m"
 YELLOW="\033[1;33m"
 BROWN="\033[0;33m"
 RED="\033[0;31m"
+BOLD="\033[1m"
 NC="\033[0m"
 
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}[-] Please execute install.sh with sudo or as root.${NC}"
+  echo -e "${RED}[-] Please run this script with sudo or as root.${NC}"
   exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Trap Ctrl+C to unhide cursor cleanly
-trap 'tput cnorm; echo -e "\n${RED}[!] Installation interrupted.${NC}"; exit 1' INT TERM
-
-# Ensure terminal cursor is restored on exit
+# Trap exits to restore cursor
+trap 'tput cnorm; echo -e "\n${RED}[!] Process interrupted.${NC}"; exit 1' INT TERM
 cleanup() {
     tput cnorm
 }
 trap cleanup EXIT
 
-# Clear screen & hide cursor
-clear
-tput civis
+# ==========================================================
+# ANIMATION ENGINES
+# ==========================================================
 
-# Animation Stages
-stage_1() {
+# 1. Big Growth Animation (Install)
+grow_stage_1() {
 cat << "EOF"
-        _  _
-       ( \/ )
-        \  /   🚿
-         \/     :
-                .
-           .
-          (.)
-    ~~~~~~~~~~~~~~
+             .--.
+          .-(    ).
+         (___.__)__)   ☁️
+           : : : :     🌧️
+           : : : :
+              
+              .
+            ( • )
+    =========================
 EOF
 }
 
-stage_2() {
+grow_stage_2() {
 cat << "EOF"
-        _  _
-       ( \/ )
-        \  /   🚿
-         \/     :
-                .
-           🌱
-    ~~~~~~~~~~~~~~
+             .--.
+          .-(    ).
+         (___.__)__)   ☁️
+           : : : :     🌧️
+           : : : :
+
+             \|/
+            --*--  🌱
+              |
+    =========================
 EOF
 }
 
-stage_3() {
+grow_stage_3() {
 cat << "EOF"
-        _  _
-       ( \/ )
-        \  /   🚿
-         \/     :
-          \ | /
-           \|/
-            |
-            |
-    ~~~~~~~~~~~~~~
+             .--.
+          .-(    ).
+         (___.__)__)   ☁️
+           : : : :     🌧️
+           : : : :
+            \ | /
+             \|/
+             /|\
+            / | \
+              |
+              |
+    =========================
 EOF
 }
 
-stage_4() {
+grow_stage_4() {
 cat << "EOF"
-           &&&
-         &&&&&&
-        &&&|&&&&
-           | /
-           |/
-           |
-    ~~~~~~~~~~~~~~
+              &&&
+            &&&&&&&
+          &&&  |  &&&
+           &&  |  &&
+             \ | /
+              \|/
+               |
+               |
+               |
+    =========================
 EOF
 }
 
-stage_5() {
+grow_stage_5() {
 cat << "EOF"
-         ,@@@@@@@,
-       ,,@@@@|@@@@@@,
-      &&&&&&&|&&&&&&&&
-       &&&&&&|/&&&&&&
-           { | }
-            \|/
-             |
-             |
-    ~~~~~~~~~~~~~~~~~~
+           ,@@@@@@@@,
+         ,@@@@@@@@@@@@,
+       ,@@@@@@@|@@@@@@@@,
+      &&&&&&&&&|&&&&&&&&&&
+       &&&&&&&&|/&&&&&&&&
+          {   |   }
+           \  |  /
+            \ | /
+              |
+              |
+              |
+    =========================
 EOF
 }
 
-stage_6() {
+grow_stage_6() {
 cat << "EOF"
-         ,@@@@@@@,
-       ,,@@@@|@@@@@@,
-      &&&%#%&|&&%#%&&&
-     &&%#%#%&|&%#%#%&&&
-      &&&%#%&|/&&%#%&&
-           { | }
-            \|/
-             |
-             |
-    ~~~~~~~~~~~~~~~~~~
+          ,@@@@@@@@@@,
+       ,,@@@@@@@@@@@@@@,,
+      &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+           \  |  /
+            \ | /
+              |
+              |
+              |
+    =========================
 EOF
 }
 
-# The actual background installation worker
-install_worker() {
-    # 1. System packages
-    apt-get update -y >> "$LOG_FILE" 2>&1
-    apt-get install -y \
-        nmap \
-        netdiscover \
-        exploitdb \
-        python3 \
-        python3-pip \
-        python3-setuptools \
-        python3-wheel \
-        python3-bs4 \
-        python3-markdown \
-        python3-requests >> "$LOG_FILE" 2>&1
+# 2. Big Grooming Animation (Update)
+groom_stage_1() {
+cat << "EOF"
+       ✂️
+          ,@@@@@@@@@@,
+       ,,@@@@@@@@@@@@@@,,
+      &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+            \ | /
+              |
+              |
+    =========================
+EOF
+}
 
-    # 2. Force install all Python packages for both user and root
-    REQUIRED_PY_MODULES=(
-        "rich>=13.7.0"
-        "beautifulsoup4>=4.12.0"
-        "requests>=2.31.0"
-        "xhtml2pdf>=0.2.16"
-        "markdown>=3.6"
-        "python-nmap>=0.7.1"
-        "google-genai>=0.1.1"
-    )
+groom_stage_2() {
+cat << "EOF"
+                 ✂️
+          ,@@@@@@@@@@,
+       ,,@@@@@@@@@@@@@@,,
+      &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&  ✨
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+            \ | /
+              |
+              |
+    =========================
+EOF
+}
 
-    for mod in "${REQUIRED_PY_MODULES[@]}"; do
-        python3 -m pip install "$mod" --break-system-packages --ignore-installed >> "$LOG_FILE" 2>&1 || true
+groom_stage_3() {
+cat << "EOF"
+          ,@@@@@@@@@@,     ✂️
+       ,,@@@@@@@@@@@@@@,,
+   ✨ &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+            \ | /
+              |
+              |
+    =========================
+EOF
+}
+
+groom_stage_4() {
+cat << "EOF"
+          ,@@@@@@@@@@,
+       ,,@@@@@@@@@@@@@@,,   ✨
+      &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+            \ | /
+              |
+              |
+    =========================
+EOF
+}
+
+# 3. Big Chopping / Removal Animation (Remove)
+chop_stage_1() {
+cat << "EOF"
+          ,@@@@@@@@@@,
+       ,,@@@@@@@@@@@@@@,,
+      &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+            \ | /
+        🪓    |
+              |
+    =========================
+EOF
+}
+
+chop_stage_2() {
+cat << "EOF"
+          ,@@@@@@@@@@,
+       ,,@@@@@@@@@@@@@@,,
+      &&&%#%#%&|&%#%#%&&&
+     &&%#%#%#%&|&%#%#%#%&&
+    &&%#%#%#%#&|&%#%#%#%#&&
+      &&&%#%#%&|/&%#%#%&&
+          {   |   }
+            \ | /
+           💥>|
+              |
+    =========================
+EOF
+}
+
+chop_stage_3() {
+cat << "EOF"
+             ,@@@@@@@@@@,
+          ,,@@@@@@@@@@@@@@,,
+         &&&%#%#%&|&%#%#%&&& \
+        &&%#%#%#%&|&%#%#%#%&& \
+       &&%#%#%#%#&|&%#%#%#%#&& \
+         &&&%#%#%&|/&%#%#%&&    \
+             {   |   }           \
+               \ | /              \
+                 |                 \
+                 |                  v
+    =========================
+EOF
+}
+
+chop_stage_4() {
+cat << "EOF"
+                             🍃
+                                 🍂
+                                     🪵
+
+                 \ /
+                --*-- (Stump)
+                 / \
+    =========================
+EOF
+}
+
+# Runner to display animations while waiting for background jobs
+run_animation() {
+    local mode=$1
+    local title=$2
+    shift 2
+    local stages=("$@")
+
+    clear
+    tput civis
+    local idx=0
+    local total=${#stages[@]}
+
+    while kill -0 $BG_PID 2>/dev/null; do
+        tput cup 0 0
+        echo -e "${CYAN}================================================================${NC}"
+        echo -e "${GREEN}             TREE FRAMEWORK - ${title}             ${NC}"
+        echo -e "${CYAN}================================================================${NC}\n"
+
+        ${stages[$idx]}
+
+        echo -e "\n${YELLOW}[*] Working in background... Please wait.${NC}\n"
+        idx=$(( (idx + 1) % total ))
+        sleep 1.2
     done
 
-    if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
-        python3 -m pip install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages --ignore-installed >> "$LOG_FILE" 2>&1 || true
-    fi
+    wait $BG_PID
+    local exit_code=$?
+    clear
+    tput cnorm
+    return $exit_code
+}
 
-    # 3. Create global executable wrapper
+# ==========================================================
+# WORKER FUNCTIONS
+# ==========================================================
+
+do_install() {
+    apt-get update -y >> "$LOG_FILE" 2>&1
+    apt-get install -y nmap netdiscover exploitdb python3 python3-pip python3-bs4 python3-markdown python3-requests >> "$LOG_FILE" 2>&1
+
+    python3 -m pip install \
+        "rich>=13.7.0" \
+        "beautifulsoup4>=4.12.0" \
+        "requests>=2.31.0" \
+        "xhtml2pdf>=0.2.16" \
+        "markdown>=3.6" \
+        "python-nmap>=0.7.1" \
+        "google-genai>=0.1.1" \
+        --break-system-packages --ignore-installed >> "$LOG_FILE" 2>&1 || true
+
     chmod +x "$SCRIPT_DIR/tree"
-
     cat << EOF > /usr/local/bin/tree-sec
 #!/usr/bin/env bash
 exec python3 "$SCRIPT_DIR/tree" "\$@"
@@ -162,98 +320,128 @@ EOF
     chmod +x /usr/local/bin/tree-sec
     ln -sf /usr/local/bin/tree-sec /usr/bin/tree-sec
 
-    # 4. Network and DNS IPv4 tuning
     if ! grep -q "precedence ::ffff:0:0/96 100" /etc/gai.conf 2>/dev/null; then
         echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
     fi
 }
 
-# Start background installation
-install_worker &
-PID=$!
+do_update() {
+    cd "$SCRIPT_DIR"
+    git fetch origin main >> "$LOG_FILE" 2>&1
+    git reset --hard origin/main >> "$LOG_FILE" 2>&1
 
-STAGES=(stage_1 stage_2 stage_3 stage_4 stage_5 stage_6)
-MSG=(
-    "Planting the seed & preparing system packages..."
-    "Watering the seed & configuring build utilities..."
-    "Sprouting roots & fetching exploit databases..."
-    "Growing branches & building Python environments (rich, genai, nmap)..."
-    "Budding leaves & linking global binary wrappers..."
-    "Blooming into TREE framework..."
-)
+    python3 -m pip install -r requirements.txt --break-system-packages --ignore-installed >> "$LOG_FILE" 2>&1 || true
+    chmod +x "$SCRIPT_DIR/tree"
+    ln -sf "$SCRIPT_DIR/tree" /usr/local/bin/tree-sec
+    ln -sf "$SCRIPT_DIR/tree" /usr/bin/tree-sec
+}
 
-idx=0
-total_stages=${#STAGES[@]}
+do_remove() {
+    rm -f /usr/local/bin/tree-sec
+    rm -f /usr/bin/tree-sec
+    rm -f /root/.tree_config.json
+    rm -f "$HOME/.tree_config.json"
+}
 
-while kill -0 $PID 2>/dev/null; do
-    tput cup 0 0
-    echo -e "${CYAN}======================================================${NC}"
-    echo -e "${GREEN}             TREE FRAMEWORK INSTALLATION              ${NC}"
-    echo -e "${CYAN}======================================================${NC}\n"
-
-    ${STAGES[$idx]}
-    
-    echo -e "\n${YELLOW}[*] ${MSG[$idx]}${NC}"
-    echo -e "${BLUE}[~] Working quietly in the background...${NC}\n"
-
-    idx=$(( (idx + 1) % total_stages ))
-    sleep 2.5
-done
-
-wait $PID
-INSTALL_EXIT_CODE=$?
+# ==========================================================
+# INTERACTIVE CLI DISPATCHER
+# ==========================================================
 
 clear
-tput cnorm
-
-if [ $INSTALL_EXIT_CODE -ne 0 ]; then
-    echo -e "${RED}[-] Installation failed. Details from $LOG_FILE:${NC}\n"
-    tail -n 25 "$LOG_FILE"
-    exit 1
-fi
-
-# Print final mature tree banner
 echo -e "${GREEN}"
 cat << "EOF"
-         ,@@@@@@@,
-       ,,@@@@|@@@@@@,
-      &&&%#%&|&&%#%&&&
-     &&%#%#%&|&%#%#%&&&
-      &&&%#%&|/&&%#%&&
-           { | }
-            \|/
-             |
-             |
-    ~~~~~~~~~~~~~~~~~~
+  _______ _____  ______ ______ 
+ |__   __|  __ \|  ____|  ____|
+    | |  | |__) | |__  | |__   
+    | |  |  _  /|  __| |  __|  
+    | |  | | \ \| |____| |____ 
+    |_|  |_|  \_\______|______|
+  AI-Powered Penetration Testing
 EOF
 echo -e "${NC}"
-
 echo -e "${CYAN}======================================================${NC}"
-echo -e "${GREEN}[+] TREE framework has grown and is ready!${NC}"
+echo -e "${BOLD}Select an operation:${NC}"
+echo -e "  ${GREEN}[1]${NC} ${BOLD}Install TREE${NC}   (Fresh system & dependency setup)"
+echo -e "  ${YELLOW}[2]${NC} ${BOLD}Update TREE${NC}    (Compare with GitHub & sync changes)"
+echo -e "  ${RED}[3]${NC} ${BOLD}Remove TREE${NC}    (Uninstall binaries, symlinks & configs)"
+echo -e "  ${BLUE}[4]${NC} Exit"
 echo -e "${CYAN}======================================================${NC}"
+read -p "Enter choice [1-4]: " CHOICE
 
-# Verification check of modules
-echo -e "\n${BLUE}[*] Performing integrity check on required imports...${NC}"
-python3 -c "
-import sys
-required = ['rich', 'bs4', 'requests', 'xhtml2pdf', 'markdown', 'nmap', 'google.genai']
-missing = []
-for mod in required:
-    try:
-        __import__(mod)
-        print(f' \033[0;32m[✓]\033[0m {mod}')
-    except ImportError:
-        missing.append(mod)
-        print(f' \033[0;31m[✗]\033[0m {mod}')
+case "$CHOICE" in
+    1)
+        echo -e "\n${BLUE}[*] Initializing installation...${NC}"
+        do_install &
+        BG_PID=$!
+        run_animation "INSTALL" "INSTALLING" grow_stage_1 grow_stage_2 grow_stage_3 grow_stage_4 grow_stage_5 grow_stage_6
 
-if missing:
-    sys.exit(1)
-"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}[+] TREE successfully installed!${NC}"
+            echo -e "${CYAN}[*] Launch the console anytime with: ${YELLOW}sudo tree-sec${NC}\n"
+        else
+            echo -e "${RED}[-] Installation failed. Details in $LOG_FILE${NC}"
+            exit 1
+        fi
+        ;;
 
-if [ $? -eq 0 ]; then
-    echo -e "\n${GREEN}[✓] All imports verified successfully.${NC}"
-    echo -e "${YELLOW}[*] Launch the console anytime using:${NC} ${GREEN}sudo tree-sec${NC}\n"
-else
-    echo -e "\n${RED}[!] Some Python modules failed to load. Check /tmp/tree_install.log for details.${NC}\n"
-    exit 1
-fi
+    2)
+        # Check if installed
+        if [ ! -f "/usr/local/bin/tree-sec" ] && ! command -v tree-sec &>/dev/null; then
+            echo -e "\n${RED}[-] TREE is not installed on this system.${NC}"
+            echo -e "${YELLOW}[!] Please run install first (Option 1).${NC}\n"
+            exit 1
+        fi
+
+        echo -e "\n${BLUE}[*] Comparing local repository with origin/main (github.com/halalee/tree)...${NC}"
+        cd "$SCRIPT_DIR"
+        git fetch origin main >/dev/null 2>&1 || {
+            echo -e "${RED}[-] Could not reach GitHub. Check network connectivity.${NC}"
+            exit 1
+        }
+
+        LOCAL_HASH=$(git rev-parse HEAD)
+        REMOTE_HASH=$(git rev-parse origin/main)
+
+        if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
+            echo -e "${GREEN}[✓] TREE is already up to date with GitHub! (Commit: ${LOCAL_HASH:0:7})${NC}\n"
+            exit 0
+        fi
+
+        echo -e "${YELLOW}[*] Changes detected! Syncing with remote repository...${NC}"
+        do_update &
+        BG_PID=$!
+        run_animation "UPDATE" "GROOMING & UPDATING" groom_stage_1 groom_stage_2 groom_stage_3 groom_stage_4
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}[+] TREE has been groomed and updated to latest version!${NC}\n"
+        else
+            echo -e "${RED}[-] Update failed. Check $LOG_FILE${NC}"
+            exit 1
+        fi
+        ;;
+
+    3)
+        if [ ! -f "/usr/local/bin/tree-sec" ] && ! command -v tree-sec &>/dev/null; then
+            echo -e "\n${RED}[-] TREE is not currently installed on this system.${NC}\n"
+            exit 0
+        fi
+
+        echo -e "\n${RED}[*] Cutting down and removing TREE...${NC}"
+        do_remove &
+        BG_PID=$!
+        run_animation "REMOVE" "CHOPPING & REMOVING" chop_stage_1 chop_stage_2 chop_stage_3 chop_stage_4
+
+        echo -e "${GREEN}[+] TREE has been completely removed from system PATH and binaries.${NC}"
+        echo -e "${BLUE}[*] You can delete this source directory with: rm -rf $SCRIPT_DIR${NC}\n"
+        ;;
+
+    4)
+        echo -e "\nExiting."
+        exit 0
+        ;;
+
+    *)
+        echo -e "\n${RED}[-] Invalid option selected.${NC}"
+        exit 1
+        ;;
+esac
