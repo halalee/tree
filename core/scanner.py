@@ -38,8 +38,9 @@ class LocalNetworkScanner:
         return None, None
 
     @staticmethod
+    @staticmethod
     def discover_hosts(cidr=None):
-        """Runs netdiscover in fast batch mode (-P -N) and parses results."""
+        """Runs netdiscover in fast batch mode (-P -N), followed by rapid Nmap OS detection."""
         if not shutil.which("netdiscover"):
             return []
 
@@ -62,6 +63,7 @@ class LocalNetworkScanner:
             return []
 
         live_hosts = []
+        ip_list = []
         for line in output.splitlines():
             line = line.strip()
             if not line:
@@ -85,8 +87,33 @@ class LocalNetworkScanner:
                     "ip": ip,
                     "mac": mac,
                     "vendor": vendor,
-                    "hostname": hostname
+                    "hostname": hostname,
+                    "os": "Unknown"
                 })
+                ip_list.append(ip)
+
+        # Fast targeted OS fingerprinting on discovered live hosts
+        if ip_list:
+            try:
+                nm = nmap.PortScanner()
+                # -O: OS detection
+                # -F: Fast scan (top 100 ports) to give the OS engine open/closed ports to test
+                # --osscan-limit & --max-os-tries 1: prevents stalling on stubborn hosts
+                target_str = " ".join(ip_list)
+                nm.scan(hosts=target_str, arguments="-O -F --osscan-limit --max-os-tries 1 -T4")
+
+                for host_entry in live_hosts:
+                    ip = host_entry["ip"]
+                    if ip in nm.all_hosts():
+                        host_data = nm[ip]
+                        if "osmatch" in host_data and host_data["osmatch"]:
+                            os_guess = host_data["osmatch"][0].get("name", "Unknown")
+                            if len(os_guess) > 28:
+                                os_guess = os_guess[:25] + "..."
+                            host_entry["os"] = os_guess
+            except Exception:
+                pass
+
         return live_hosts
 
 

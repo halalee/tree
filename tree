@@ -145,15 +145,21 @@ class TreeConsole:
                         console.print("[yellow][!] No active hosts responded on this subnet.[/yellow]")
                         continue
 
-                    table = Table(title=f"Discovered Devices ({len(self.discovered_hosts)} hosts online)", border_style="green")
-                    table.add_column("ID", style="bold cyan", justify="center")
-                    table.add_column("IP Address", style="yellow")
-                    table.add_column("MAC Address", style="white")
-                    table.add_column("Vendor / Device Info", style="magenta")
-                    table.add_column("Hostname", style="dim")
+                    table = Table(title="[bold green]Live Network Hosts[/bold green]")
+                    table.add_column("ID", justify="center", style="cyan", no_wrap=True)
+                    table.add_column("IP Address", style="bold green")
+                    table.add_column("MAC Address", style="yellow")
+                    table.add_column("Vendor", style="magenta")
+                    table.add_column("OS Detection", style="blue")
 
                     for idx, host in enumerate(self.discovered_hosts):
-                        table.add_row(str(idx), host["ip"], host["mac"], host["vendor"], host["hostname"])
+                        table.add_row(
+                            str(idx),
+                            host.get("ip", "N/A"),
+                            host.get("mac", "N/A"),
+                            host.get("vendor", "Unknown Vendor"),
+                            host.get("os", host.get("hostname", "Unknown"))
+                        )
                     console.print(table)
                     console.print("[dim]Use [bold cyan]select <ID>[/bold cyan] to set an active target.[/dim]\n")
 
@@ -162,7 +168,7 @@ class TreeConsole:
                         idx = int(parts[1])
                         if 0 <= idx < len(self.discovered_hosts):
                             self.target = self.discovered_hosts[idx]["ip"]
-                            console.print(f"[green][+] Target set to device #{idx}:[/green] [bold]{self.target}[/bold] ({self.discovered_hosts[idx]['vendor']})")
+                            console.print(f"[green][+] Target set to device #{idx}:[/green] [bold]{self.target}[/bold] ({self.discovered_hosts[idx].get('vendor', 'Unknown')})")
                         else:
                             console.print(f"[red][-] Invalid ID. Choose between 0 and {len(self.discovered_hosts) - 1}.[/red]")
                     except ValueError:
@@ -189,7 +195,7 @@ class TreeConsole:
                     t.add_row("TARGET", self.target or "None")
                     masked_key = (self.api_key[:6] + "..." + self.api_key[-4:]) if len(self.api_key) > 10 else "Configured"
                     t.add_row("API_KEY", masked_key)
-                    t.add_row("AI_MODEL", "gemini-3.6-flash")
+                    t.add_row("AI_MODEL", "gemini-flash")
                     console.print(t)
 
                 elif cmd == "scan":
@@ -215,7 +221,6 @@ class TreeConsole:
                         progress.advance(p_task, 1)
 
                         progress.update(p_task, description="[cyan]3/3 Running Exploit-DB, SSH, and Web audits...")
-                        # Run audits on the gathered services without restarting nmap
                         for svc in scanner.results["nmap_services"]:
                             if "error" in svc:
                                 continue
@@ -297,8 +302,8 @@ class TreeConsole:
                         self.latest_report = "".join(full_report)
                         console.print("\n\n[bold green][+] Analysis complete. Ready to 'export report.pdf'[/bold green]\n")
 
-                    except requests.exceptions.Timeout:
-                        console.print("\n[red][-] Connection timed out. Check network connection or try another model.[/red]")
+                    except requests.exceptions.RequestException as e:
+                        console.print(f"\n[red][-] Network/DNS Error: Unable to reach Gemini API ({e.__class__.__name__}). Check network or /etc/resolv.conf.[/red]")
                     except Exception as e:
                         console.print(f"\n[red][-] Error during analysis: {str(e)}[/red]")
 
