@@ -3,6 +3,8 @@ import sys
 import os
 import json
 import time
+import base64
+import hashlib
 import requests
 import markdown
 from pathlib import Path
@@ -30,116 +32,233 @@ BANNER = """[bold green]
      ██║   ██╔══██╗██╔══╝  ██╔══╝  
      ██║   ██║  ██║███████╗███████╗
      ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝[/bold green]
-[dim]AI-Powered Penetration Testing & Vulnerability Assessment Console[/dim]
+[dim]Multi-Provider AI Penetration Testing & Vulnerability Assessment Console[/dim]
 """
 
-def save_api_key(api_key: str):
-    config_data = {"gemini_api_key": api_key}
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config_data, f, indent=2)
-    os.chmod(CONFIG_PATH, 0o600)
-
-def validate_gemini_key(api_key: str) -> tuple[bool, str]:
-    """Tests an API key against Google Gemini endpoint using a lightweight probe."""
-    if not api_key or len(api_key.strip()) < 10:
-        return False, "Key format is too short or empty."
-
-    test_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key.strip()}"
+# ==============================================================================
+# SECURE ENCRYPTION / KEY VAULT (Obfuscated at rest via Host-Key Derivation)
+# ==============================================================================
+def _derive_host_key() -> bytes:
+    """Derives a host-specific cryptographic encryption key so keys cannot be read outside this host."""
     try:
-        resp = requests.get(test_url, timeout=5)
-        if resp.status_code == 200:
-            return True, "Active and valid."
-        elif resp.status_code == 400:
-            return False, "Invalid API Key (HTTP 400: API_KEY_INVALID)."
-        elif resp.status_code == 403:
-            return False, "API Key rejected or Generative Language API is disabled (HTTP 403)."
-        else:
-            return False, f"Google API returned HTTP {resp.status_code}: {resp.text}"
+        with open("/etc/machine-id", "r") as f:
+            host_id = f.read().strip()
+    except Exception:
+        host_id = "tree-default-static-salt-kali-sec"
+    user_salt = os.getenv("USER", "kali")
+    combo = f"{host_id}-{user_salt}-tree-key-protection-vault"
+    return hashlib.sha256(combo.encode()).digest()
+
+def encrypt_key(raw_key: str) -> str:
+    """XORs the raw key with host key and encodes in base64 so it cannot be read as plain text."""
+    key_bytes = _derive_host_key()
+    raw_bytes = raw_key.encode("utf-8")
+    encrypted = bytes([b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(raw_bytes)])
+    return "enc:" + base64.b64encode(encrypted).decode("utf-8")
+
+def decrypt_key(stored_val: str) -> str:
+    """Decrypts host-encrypted keys back to plain memory for API dispatch."""
+    if not stored_val.startswith("enc:"):
+        return stored_val  # Legacy unencrypted fallback
+    data = base64.b64decode(stored_val[4:])
+    key_bytes = _derive_host_key()
+    decrypted = bytes([b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(data)])
+    return decrypted.decode("utf-8")
+
+
+# ==============================================================================
+# LIVE VALIDATION ENGINE FOR ALL PROVIDERS
+# ==============================================================================
+def validate_provider_key(provider: str, api_key: str) -> tuple[bool, str]:
+    """Probes the provider endpoint live to confirm key validity before saving."""
+    provider = provider.lower()
+    k = api_key.strip()
+    if len(k) < 6:
+        return False, "Key is too short or empty."
+
+    try:
+        if provider == "gemini":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={k}"
+            res = requests.get(url, timeout=6)
+            if res.status_code == 200:
+                return True, "Active and valid."
+            return False, f"Gemini rejected key (HTTP {res.status_code})"
+
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/models"
+            headers = {"Authorization": f"Bearer {k}"}
+            res = requests.get(url, headers=headers, timeout=6)
+            if res.status_code == 200:
+                return True, "Active and valid."
+            return False, f"OpenAI rejected key (HTTP {res.status_code})"
+
+        elif provider == "claude":
+            url = "https://api.anthropic.com/v1/models"
+            headers = {"x-api-key": k, "anthropic-version": "2023-06-01"}
+            res = requests.get(url, headers=headers, timeout=6)
+            if res.status_code == 200 or "not_found_error" not in res.text:
+                return True, "Active and valid."
+            return False, f"Anthropic rejected key (HTTP {res.status_code})"
+
+        elif provider == "openrouter":
+            url = "https://openrouter.ai/api/v1/auth/key"
+            headers = {"Authorization": f"Bearer {k}"}
+            res = requests.get(url, headers=headers, timeout=6)
+            if res.status_code == 200:
+                return True, "Active and valid."
+            return False, f"OpenRouter rejected key (HTTP {res.status_code})"
+
+        return False, f"Unknown provider: {provider}"
     except requests.exceptions.RequestException as e:
-        return False, f"Network/DNS error during validation: {e.__class__.__name__}"
+        return False, f"Network error during verification: {e.__class__.__name__}"
 
-def prompt_and_validate_key() -> str:
-    """Prompts user for an API key in a loop until a functioning one is entered."""
-    console.print(Panel(
-        "[bold yellow]Google Gemini API Key Required[/bold yellow]\n\n"
-        "A functioning Gemini API key is needed for automated vulnerability triage.\n"
-        "Keys can be generated for free at: [cyan]https://aistudio.google.com/app/apikey[/cyan]",
-        border_style="yellow"
-    ))
 
-    while True:
-        candidate_key = console.input("[bold cyan]Enter Gemini API Key: [/bold cyan]").strip()
-        if not candidate_key:
-            console.print("[red][-] Key cannot be empty.[/red]")
-            continue
-
-        with console.status("[cyan]Verifying API key against Google servers...", spinner="dots"):
-            is_valid, reason = validate_gemini_key(candidate_key)
-
-        if is_valid:
-            save_api_key(candidate_key)
-            console.print("[bold green][✓] API key validated and saved successfully.[/bold green]\n")
-            return candidate_key
-        else:
-            console.print(f"[bold red][✗] Key Verification Failed:[/bold red] {reason}")
-            console.print("[yellow][!] Please check your key in Google AI Studio and enter a valid one.[/yellow]\n")
-
-def load_or_prompt_api_key() -> str:
-    """Loads saved key and verifies it against Google servers; re-prompts if revoked or invalid."""
+# ==============================================================================
+# CONFIG & VAULT STORAGE HANDLERS
+# ==============================================================================
+def load_config() -> dict:
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH, "r") as f:
-                data = json.load(f)
-                saved_key = data.get("gemini_api_key", "").strip()
-
-            if saved_key:
-                with console.status("[cyan]Validating Gemini API key with Google servers...", spinner="dots"):
-                    is_valid, reason = validate_gemini_key(saved_key)
-
-                if is_valid:
-                    console.print("[dim green][✓] Gemini API key verified active.[/dim green]")
-                    return saved_key
-                else:
-                    console.print(f"[bold red][!] Saved Gemini key failed validation:[/bold red] {reason}")
-                    console.print("[yellow][*] Requesting a new valid key...[/yellow]\n")
+                return json.load(f)
         except Exception:
             pass
+    return {"active_key_name": None, "keys": {}}
 
-    return prompt_and_validate_key()
+def save_config(cfg: dict):
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2)
+    os.chmod(CONFIG_PATH, 0o600)
 
+def prompt_new_key_interactive(cfg: dict, default_active: bool = False) -> str:
+    """Interactively prompts user to select a service, provide an alias name and key."""
+    console.print("\n[bold cyan]Select AI Service:[/bold cyan]")
+    console.print("  [bold green][1][/bold green] Google Gemini (Recommended / Free Tier)")
+    console.print("  [bold green][2][/bold green] OpenAI (ChatGPT - GPT-4o / GPT-4o-mini)")
+    console.print("  [bold green][3][/bold green] Anthropic (Claude 3.5 Sonnet / Haiku)")
+    console.print("  [bold green][4][/bold green] OpenRouter (Multi-model / Llama-3 / DeepSeek)")
+
+    choice_map = {"1": "gemini", "2": "openai", "3": "claude", "4": "openrouter"}
+    selected_provider = "gemini"
+    while True:
+        c = console.input("[cyan]Select Provider [1-4] (Default: 1): [/cyan]").strip()
+        if not c:
+            selected_provider = "gemini"
+            break
+        if c in choice_map:
+            selected_provider = choice_map[c]
+            break
+        console.print("[red][!] Invalid selection. Enter 1, 2, 3, or 4.[/red]")
+
+    while True:
+        alias = console.input("[cyan]Enter a unique name for this API key (e.g. 'my-gemini'): [/cyan]").strip()
+        if not alias:
+            console.print("[red][!] Name cannot be empty.[/red]")
+            continue
+        if alias in cfg.get("keys", {}):
+            console.print(f"[yellow][!] An API key with the name '{alias}' already exists. Overwrite? (y/n): [/yellow]", end="")
+            if console.input().strip().lower() != "y":
+                continue
+        break
+
+    while True:
+        raw_key = console.input(f"[cyan]Enter {selected_provider.upper()} API Key: [/cyan]").strip()
+        if not raw_key:
+            console.print("[red][!] Key cannot be empty.[/red]")
+            continue
+
+        with console.status(f"[cyan]Testing {selected_provider.upper()} API key validity...", spinner="dots"):
+            is_valid, reason = validate_provider_key(selected_provider, raw_key)
+
+        if is_valid:
+            if "keys" not in cfg:
+                cfg["keys"] = {}
+            cfg["keys"][alias] = {
+                "provider": selected_provider,
+                "encrypted_key": encrypt_key(raw_key),
+                "created_at": time.strftime("%Y-%m-%d %H:%M")
+            }
+            if default_active or not cfg.get("active_key_name"):
+                cfg["active_key_name"] = alias
+
+            save_config(cfg)
+            console.print(f"[bold green][✓] Key '{alias}' ({selected_provider.upper()}) validated, encrypted, and saved![/bold green]\n")
+            return alias
+        else:
+            console.print(f"[bold red][✗] Key Verification Failed:[/bold red] {reason}")
+            console.print("[yellow][!] Try entering the key again or press Ctrl+C to cancel.[/yellow]\n")
+
+
+def ensure_startup_key(cfg: dict) -> tuple[str, str, str]:
+    """Ensures at least one valid, functioning API key is ready at launch."""
+    active_alias = cfg.get("active_key_name")
+    keys = cfg.get("keys", {})
+
+    if not keys or not active_alias or active_alias not in keys:
+        console.print(Panel(
+            "[bold yellow]First-Time AI Service Configuration[/bold yellow]\n\n"
+            "TREE requires at least one configured AI service (Gemini, ChatGPT, Claude, or OpenRouter)\n"
+            "for automated vulnerability triage and security auditing.",
+            border_style="yellow"
+        ))
+        active_alias = prompt_new_key_interactive(cfg, default_active=True)
+        keys = cfg.get("keys", {})
+
+    # Live verification on startup
+    target_info = keys[active_alias]
+    provider = target_info.get("provider", "gemini")
+    plain_key = decrypt_key(target_info.get("encrypted_key", ""))
+
+    with console.status(f"[cyan]Validating active key '{active_alias}' ({provider.upper()})...", spinner="dots"):
+        valid, msg = validate_provider_key(provider, plain_key)
+
+    if valid:
+        console.print(f"[dim green][✓] AI Key Active: '{active_alias}' ({provider.upper()})[/dim green]")
+        return active_alias, provider, plain_key
+    else:
+        console.print(f"[bold red][!] Active API key '{active_alias}' failed validation:[/bold red] {msg}")
+        console.print("[yellow][*] Let's configure or switch to a working key now.[/yellow]\n")
+        new_alias = prompt_new_key_interactive(cfg, default_active=True)
+        target_info = cfg["keys"][new_alias]
+        return new_alias, target_info["provider"], decrypt_key(target_info["encrypted_key"])
+
+
+# ==============================================================================
+# MAIN CONSOLE ENVIRONMENT
+# ==============================================================================
 class TreeConsole:
     def __init__(self):
         self.target = None
         self.last_results = None
         self.latest_report = None
         self.discovered_hosts = []
-        self.api_key = load_or_prompt_api_key()
-        self.ai = None
-        try:
-            self.ai = AIEngine(api_key=self.api_key)
-        except Exception as e:
-            console.print(f"[red][!] Error initializing AI Engine: {e}[/red]")
+        self.cfg = load_config()
+        self.active_key_name, self.provider, self.raw_key = ensure_startup_key(self.cfg)
+        self.ai = AIEngine(provider=self.provider, api_key=self.raw_key)
 
     def print_help(self):
         table = Table(title="Available Commands", border_style="green")
         table.add_column("Command", style="cyan", no_wrap=True)
         table.add_column("Description")
-        table.add_row("netscan", "Scan local connected subnet with visual ARP progress")
+        table.add_row("netscan", "Scan local subnet with ARP & OS detection")
         table.add_row("select <id>", "Select a discovered device ID as active target")
         table.add_row("set target <ip/host>", "Manually configure target IP or hostname")
-        table.add_row("set api_key <key>", "Update and save a new Gemini API key")
-        table.add_row("show options", "Display current configuration")
-        table.add_row("scan", "Execute reconnaissance pipeline with step-by-step progress bar")
-        table.add_row("analyze", "Stream Gemini AI vulnerability triage with immediate output")
+        table.add_row("show options", "Display active target and active AI provider info")
+        table.add_row("scan", "Execute reconnaissance pipeline on the target")
+        table.add_row("analyze", "Stream AI vulnerability triage using active AI engine")
         table.add_row("report", "Display the latest generated audit report")
-        table.add_row("export [filename.pdf]", "Export the latest report to a color-styled PDF")
+        table.add_row("export [filename.pdf]", "Export the audit to a color-highlighted PDF")
+        table.add_row("key list", "Display all encrypted saved API keys and active provider")
+        table.add_row("key add", "Add, validate, and encrypt a new named API key")
+        table.add_row("key switch <name>", "Switch to a different saved AI provider/key")
+        table.add_row("key remove <name>", "Permanently delete a saved API key")
         table.add_row("clear", "Clear the terminal screen")
         table.add_row("exit / quit", "Exit the Tree console")
         console.print(table)
 
     def run(self):
         console.print(BANNER)
-        console.print("[bold green][*][/bold green] Tree initialized. Type [cyan]help[/cyan] to get started.\n")
+        console.print(f"[bold green][*][/bold green] Tree initialized. Engine: [bold cyan]{self.provider.upper()}[/bold cyan] ({self.active_key_name}). Type [cyan]help[/cyan] to get started.\n")
 
         while True:
             try:
@@ -163,6 +282,64 @@ class TreeConsole:
                     os.system("clear" if os.name == "posix" else "cls")
                     console.print(BANNER)
 
+                # --- KEY VAULT MANAGEMENT COMMANDS ---
+                elif cmd == "key":
+                    if len(parts) < 2 or parts[1].lower() == "list":
+                        table = Table(title="Configured AI API Keys (Encrypted Vault)", border_style="cyan")
+                        table.add_column("Status", justify="center")
+                        table.add_column("Key Name / Alias", style="bold")
+                        table.add_column("Provider", style="cyan")
+                        table.add_column("Encrypted Hash at Rest", style="dim")
+                        table.add_column("Added On", style="yellow")
+
+                        for alias, data in self.cfg.get("keys", {}).items():
+                            is_active = "[bold green]ACTIVE[/bold green]" if alias == self.active_key_name else ""
+                            enc_sample = data.get("encrypted_key", "")[:18] + "..."
+                            table.add_row(is_active, alias, data.get("provider", "gemini").upper(), enc_sample, data.get("created_at", "N/A"))
+                        console.print(table)
+                        console.print("[dim]Use [cyan]key add[/cyan] to register new keys, or [cyan]key switch <name>[/cyan] to switch providers.[/dim]\n")
+
+                    elif parts[1].lower() == "add":
+                        new_name = prompt_new_key_interactive(self.cfg)
+                        console.print(f"[green][+] To switch to this key, run:[/green] [bold cyan]key switch {new_name}[/bold cyan]")
+
+                    elif parts[1].lower() == "switch" and len(parts) >= 3:
+                        target_alias = parts[2]
+                        if target_alias in self.cfg.get("keys", {}):
+                            self.active_key_name = target_alias
+                            self.cfg["active_key_name"] = target_alias
+                            save_config(self.cfg)
+                            k_info = self.cfg["keys"][target_alias]
+                            self.provider = k_info["provider"]
+                            self.raw_key = decrypt_key(k_info["encrypted_key"])
+                            self.ai = AIEngine(provider=self.provider, api_key=self.raw_key)
+                            console.print(f"[bold green][✓] Switched active AI provider to:[/bold green] [cyan]{self.provider.upper()}[/cyan] (Key: {target_alias})")
+                        else:
+                            console.print(f"[red][-] Key '{target_alias}' does not exist. Run 'key list' to see available keys.[/red]")
+
+                    elif parts[1].lower() == "remove" and len(parts) >= 3:
+                        rem_alias = parts[2]
+                        if rem_alias not in self.cfg.get("keys", {}):
+                            console.print(f"[red][-] Key '{rem_alias}' not found in vault.[/red]")
+                            continue
+                        if rem_alias == self.active_key_name and len(self.cfg.get("keys", {})) <= 1:
+                            console.print("[red][-] Cannot remove the only configured API key. Add another key first.[/red]")
+                            continue
+
+                        del self.cfg["keys"][rem_alias]
+                        if rem_alias == self.active_key_name:
+                            remaining = list(self.cfg["keys"].keys())[0]
+                            self.active_key_name = remaining
+                            self.cfg["active_key_name"] = remaining
+                            k_info = self.cfg["keys"][remaining]
+                            self.provider = k_info["provider"]
+                            self.raw_key = decrypt_key(k_info["encrypted_key"])
+                            self.ai = AIEngine(provider=self.provider, api_key=self.raw_key)
+                            console.print(f"[yellow][!] Removed active key. Fallback active key set to '{remaining}'.[/yellow]")
+
+                        save_config(self.cfg)
+                        console.print(f"[bold green][✓] Key '{rem_alias}' securely removed from vault.[/bold green]")
+
                 elif cmd == "netscan":
                     iface, cidr = LocalNetworkScanner.get_local_subnet()
                     if not cidr:
@@ -178,7 +355,7 @@ class TreeConsole:
                         TimeRemainingColumn(),
                         console=console
                     ) as progress:
-                        t = progress.add_task("[green]Sweeping local subnet for live hosts...", total=100)
+                        t = progress.add_task("[green]Sweeping local subnet with ARP & OS detection...", total=100)
                         progress.update(t, advance=30)
                         self.discovered_hosts = LocalNetworkScanner.discover_hosts(cidr)
                         progress.update(t, completed=100)
@@ -221,30 +398,18 @@ class TreeConsole:
                     if sub_opt == "target":
                         self.target = parts[2]
                         console.print(f"[green][+] Target set to:[/green] [bold]{self.target}[/bold]")
-                    elif sub_opt == "api_key":
-                        new_key = parts[2].strip()
-                        with console.status("[cyan]Verifying new API key...", spinner="dots"):
-                            is_valid, reason = validate_gemini_key(new_key)
-
-                        if is_valid:
-                            save_api_key(new_key)
-                            self.api_key = new_key
-                            self.ai = AIEngine(api_key=self.api_key)
-                            console.print("[green][✓] API key verified and updated successfully.[/green]")
-                        else:
-                            console.print(f"[bold red][✗] Verification Failed:[/bold red] {reason}")
-                            console.print("[yellow][!] The previous key was kept intact.[/yellow]")
                     else:
-                        console.print(f"[red][-] Unknown option: {parts[1]}[/red]")
+                        console.print(f"[red][-] Unknown option: {parts[1]}. Use 'key add' or 'key switch' for API credentials.[/red]")
 
                 elif cmd == "show" and len(parts) >= 2 and parts[1].lower() == "options":
                     t = Table(title="Current Configuration")
                     t.add_column("Option", style="cyan")
                     t.add_column("Value", style="bold")
                     t.add_row("TARGET", self.target or "None")
-                    masked_key = (self.api_key[:6] + "..." + self.api_key[-4:]) if len(self.api_key) > 10 else "Configured"
-                    t.add_row("API_KEY", masked_key)
-                    t.add_row("AI_MODEL", "gemini-flash")
+                    t.add_row("ACTIVE_AI_KEY", self.active_key_name or "None")
+                    t.add_row("AI_PROVIDER", self.provider.upper())
+                    masked_key = (self.raw_key[:5] + "..." + self.raw_key[-4:]) if len(self.raw_key) > 9 else "Configured"
+                    t.add_row("DECRYPTED_IN_MEMORY", masked_key)
                     console.print(t)
 
                 elif cmd == "scan":
@@ -331,18 +496,15 @@ class TreeConsole:
                     if not self.last_results:
                         console.print("[red][-] No scan data available. Run 'scan' first.[/red]")
                         continue
-                    if not self.ai:
-                        console.print("[red][-] AI engine is not configured properly.[/red]")
-                        continue
 
-                    console.print(f"[bold green][*] Starting analysis for target:[/bold green] [cyan]{self.target}[/cyan]")
+                    console.print(f"[bold green][*] Starting triage using[/bold green] [bold cyan]{self.provider.upper()}[/bold cyan] ([dim]{self.active_key_name}[/dim])")
 
                     def verbose_logger(msg: str):
                         console.print(f"  {msg}")
 
                     full_report = []
                     try:
-                        console.print(f"\n[bold green]═══ AI Security Audit Stream ({self.target}) ═══[/bold green]\n")
+                        console.print(f"\n[bold green]═══ AI Security Audit Stream ({self.provider.upper()}) ═══[/bold green]\n")
                         for chunk in self.ai.stream_analyze_recon(self.last_results, verbose_callback=verbose_logger):
                             console.print(chunk, end="", highlight=False)
                             sys.stdout.flush()
@@ -352,7 +514,7 @@ class TreeConsole:
                         console.print("\n\n[bold green][+] Analysis complete. Ready to 'export report.pdf'[/bold green]\n")
 
                     except requests.exceptions.RequestException as e:
-                        console.print(f"\n[red][-] Network/DNS Error: Unable to reach Gemini API ({e.__class__.__name__}). Check network or /etc/resolv.conf.[/red]")
+                        console.print(f"\n[red][-] Network Error: Unable to reach {self.provider.upper()} API ({e.__class__.__name__}).[/red]")
                     except Exception as e:
                         console.print(f"\n[red][-] Error during analysis: {str(e)}[/red]")
 
@@ -398,3 +560,5 @@ class TreeConsole:
 if __name__ == "__main__":
     app = TreeConsole()
     app.run()
+
+

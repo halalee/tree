@@ -1,51 +1,34 @@
 import json
-import time
-import socket
 import requests
-
-socket.setdefaulttimeout(15)
+import re
 
 class AIEngine:
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        # Use the fast, working endpoint (fallback to gemini-flash-latest if needed)
-        self.model = "gemini-flash-latest"
+    SUPPORTED_PROVIDERS = ["gemini", "openai", "claude", "openrouter"]
+
+    def __init__(self, provider: str = "gemini", api_key: str = "", model: str = None):
+        self.provider = provider.lower() if provider else "gemini"
+        self.api_key = api_key.strip()
+        self.model = model
 
     def _compact_recon(self, recon_data: dict) -> dict:
+        """Compact reconnaissance telemetry to essential security findings."""
         compact = {
             "target": recon_data.get("target"),
-            "ports": recon_data.get("ports", []),
+            "open_ports": recon_data.get("ports", []),
             "services": [],
-            "exploitdb": [],
+            "cves_and_exploits": recon_data.get("exploitdb_matches", []),
             "service_audits": recon_data.get("service_audits", {}),
-            "web_audits": []
+            "web_audits": recon_data.get("web_audits", [])
         }
-
-        for s in recon_data.get("nmap_services", []):
-            if "error" not in s:
+        for svc in recon_data.get("nmap_services", []):
+            if "error" not in svc:
                 compact["services"].append({
-                    "port": s.get("port"),
-                    "service": s.get("name"),
-                    "banner": f"{s.get('product', '')} {s.get('version', '')}".strip()
+                    "port": svc.get("port"),
+                    "name": svc.get("name"),
+                    "product": svc.get("product"),
+                    "version": svc.get("version"),
+                    "extra": svc.get("extrainfo")
                 })
-
-        for m in recon_data.get("exploitdb_matches", []):
-            compact["exploitdb"].append({
-                "port": m.get("port"),
-                "service": m.get("service"),
-                "exploits": [e.get("title") for e in m.get("exploits", [])[:2]]
-            })
-
-        for w in recon_data.get("web_audits", []):
-            audit = w.get("audit", {})
-            compact["web_audits"].append({
-                "port": w.get("port"),
-                "technologies": audit.get("technologies", []),
-                "paths": [p.get("path") for p in audit.get("discovered_paths", [])],
-                "forms_detected": len(audit.get("forms_detected", [])),
-                "has_upload": any(f.get("has_file_upload") for f in audit.get("forms_detected", []))
-            })
-
         return compact
 
     def stream_analyze_recon(self, recon_data: dict, verbose_callback=None):
@@ -53,13 +36,12 @@ class AIEngine:
             if verbose_callback:
                 verbose_callback(msg)
 
-        log("[bold blue][VERBOSE][/bold blue] Compacting reconnaissance telemetry...")
+        log(f"[bold blue][VERBOSE][/bold blue] Compacting reconnaissance telemetry for [cyan]{self.provider.upper()}[/cyan]...")
         compact_data = self._compact_recon(recon_data)
         serialized_telemetry = json.dumps(compact_data, indent=2)
-        log(f"[bold blue][VERBOSE][/bold blue] Telemetry prepared: {len(serialized_telemetry)} bytes, target: {compact_data.get('target')}")
 
         system_instruction = (
-            "You are TREE-AI, a senior cybersecurity penetration tester and technical auditor. "
+            "You are TREE-AI, an elite penetration tester and security auditor. "
             "Analyze the target reconnaissance data concisely. Provide risk ratings, explain viable "
             "attack surfaces, and give prioritized defensive remediation steps."
         )
@@ -76,74 +58,166 @@ Format using these exact Markdown sections:
 5. Prioritized Remediation & Hardening Steps
 """
 
-        payload = {
-            "system_instruction": {
-                "parts": [{"text": system_instruction}]
-            },
-            "contents": [
-                {
-                    "parts": [{"text": prompt}]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 1500
-            }
-        }
+        if self.provider == "gemini":
+            yield from self._stream_gemini(system_instruction, prompt, log)
+        elif self.provider == "openai":
+            yield from self._stream_openai(system_instruction, prompt, log)
+        elif self.provider == "claude":
+            yield from self._stream_claude(system_instruction, prompt, log)
+        elif self.provider == "openrouter":
+            yield from self._stream_openrouter(system_instruction, prompt, log)
+        else:
+            raise ValueError(f"Unsupported AI provider: {self.provider}")
 
-        # Candidate models to try in order of preference
-        candidate_models = [
-            "gemini-flash-latest",
+    # --- GEMINI STREAMING ---
+    def _stream_gemini(self, system_instruction: str, prompt: str, log):
+        models = [
+            self.model or "gemini-flash-latest",
             "gemini-2.5-flash-lite",
-            "gemini-3.5-flash"
+            "gemini-3.5-flash",
+            "gemini-2.5-flash"
         ]
-
-        headers = {"Content-Type": "application/json"}
-        last_error = None
-
-        for model in candidate_models:
-            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
-            log(f"[bold blue][VERBOSE][/bold blue] Attempting connection with [cyan]{model}[/cyan]...")
-
+        payload = {
+            "system_instruction": {"parts": [{"text": system_instruction}]},
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1800}
+        }
+        for mod in models:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:streamGenerateContent?alt=sse&key={self.api_key}"
+            log(f"[bold blue][VERBOSE][/bold blue] Attempting Gemini stream with [cyan]{mod}[/cyan]...")
             try:
-                response = requests.post(
-                    endpoint,
-                    headers=headers,
-                    data=json.dumps(payload),
-                    stream=True,
-                    timeout=(8, 30)
-                )
-
-                if response.status_code == 200:
-                    self.model = model
-                    for line in response.iter_lines(decode_unicode=True):
+                resp = requests.post(endpoint, json=payload, stream=True, timeout=(8, 35))
+                if resp.status_code == 200:
+                    for line in resp.iter_lines(decode_unicode=True):
                         if not line or not line.startswith("data: "):
                             continue
-                        
-                        data_str = line[6:].strip()
                         try:
-                            data_json = json.loads(data_str)
-                            candidates = data_json.get("candidates", [])
+                            item = json.loads(line[6:].strip())
+                            candidates = item.get("candidates", [])
                             if candidates:
-                                parts = candidates[0].get("content", {}).get("parts", [])
-                                for part in parts:
+                                for part in candidates[0].get("content", {}).get("parts", []):
                                     text = part.get("text", "")
                                     if text:
                                         yield text
                         except Exception:
                             continue
                     return
-
-                elif response.status_code in (503, 429, 404):
-                    log(f"[bold yellow][!] {model} returned HTTP {response.status_code} (Capacity/Availability). Trying next candidate...[/bold yellow]")
-                    last_error = f"HTTP {response.status_code}: {response.text}"
+                elif resp.status_code in (503, 429, 404):
+                    log(f"[bold yellow][!] {mod} returned HTTP {resp.status_code}. Trying fallback...[/bold yellow]")
                     continue
                 else:
-                    raise RuntimeError(f"API Error {response.status_code}: {response.text}")
-
+                    raise RuntimeError(f"Gemini API Error {resp.status_code}: {resp.text}")
             except requests.exceptions.RequestException as e:
-                log(f"[bold yellow][!] {model} connection error: {e}. Trying fallback...[/bold yellow]")
-                last_error = str(e)
+                log(f"[bold yellow][!] {mod} network error: {e}. Trying fallback...[/bold yellow]")
+                continue
+        raise RuntimeError("All Gemini candidate models failed to respond.")
+
+    # --- OPENAI (CHATGPT) STREAMING ---
+    def _stream_openai(self, system_instruction: str, prompt: str, log):
+        endpoint = "https://api.openai.com/v1/chat/completions"
+        target_model = self.model or "gpt-4o-mini"
+        log(f"[bold blue][VERBOSE][/bold blue] Streaming with OpenAI model: [cyan]{target_model}[/cyan]...")
+        payload = {
+            "model": target_model,
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2,
+            "stream": True
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        resp = requests.post(endpoint, headers=headers, json=payload, stream=True, timeout=(8, 35))
+        if resp.status_code != 200:
+            raise RuntimeError(f"OpenAI API Error {resp.status_code}: {resp.text}")
+
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data: "):
+                continue
+            chunk = line[6:].strip()
+            if chunk == "[DONE]":
+                break
+            try:
+                data = json.loads(chunk)
+                delta = data.get("choices", [{}])[0].get("delta", {})
+                content = delta.get("content", "")
+                if content:
+                    yield content
+            except Exception:
                 continue
 
-        raise RuntimeError(f"All candidate models unavailable. Last error: {last_error}")
+    # --- ANTHROPIC (CLAUDE) STREAMING ---
+    def _stream_claude(self, system_instruction: str, prompt: str, log):
+        endpoint = "https://api.anthropic.com/v1/messages"
+        target_model = self.model or "claude-3-5-haiku-20241022"
+        log(f"[bold blue][VERBOSE][/bold blue] Streaming with Claude model: [cyan]{target_model}[/cyan]...")
+        payload = {
+            "model": target_model,
+            "system": system_instruction,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1800,
+            "temperature": 0.2,
+            "stream": True
+        }
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        resp = requests.post(endpoint, headers=headers, json=payload, stream=True, timeout=(8, 35))
+        if resp.status_code != 200:
+            raise RuntimeError(f"Claude API Error {resp.status_code}: {resp.text}")
+
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data: "):
+                continue
+            try:
+                data = json.loads(line[6:].strip())
+                if data.get("type") == "content_block_delta":
+                    delta = data.get("delta", {})
+                    if delta.get("type") == "text_delta":
+                        yield delta.get("text", "")
+            except Exception:
+                continue
+
+    # --- OPENROUTER STREAMING ---
+    def _stream_openrouter(self, system_instruction: str, prompt: str, log):
+        endpoint = "https://openrouter.ai/api/v1/chat/completions"
+        target_model = self.model or "meta-llama/llama-3.3-70b-instruct:free"
+        log(f"[bold blue][VERBOSE][/bold blue] Streaming via OpenRouter model: [cyan]{target_model}[/cyan]...")
+        payload = {
+            "model": target_model,
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": True
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "https://github.com/halalee/tree",
+            "X-Title": "TREE-Framework",
+            "Content-Type": "application/json"
+        }
+        resp = requests.post(endpoint, headers=headers, json=payload, stream=True, timeout=(8, 35))
+        if resp.status_code != 200:
+            raise RuntimeError(f"OpenRouter API Error {resp.status_code}: {resp.text}")
+
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data: "):
+                continue
+            chunk = line[6:].strip()
+            if chunk == "[DONE]":
+                break
+            try:
+                data = json.loads(chunk)
+                delta = data.get("choices", [{}])[0].get("delta", {})
+                content = delta.get("content", "")
+                if content:
+                    yield content
+            except Exception:
+                continue
+

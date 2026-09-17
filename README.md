@@ -3,175 +3,150 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform: Kali Linux](https://img.shields.io/badge/Platform-Kali%20Linux%20%7C%20Debian%20%7C%20WSL-blue.svg)](https://www.kali.org)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-yellow.svg)](https://www.python.org)
-[![AI Engine: Gemini Flash](https://img.shields.io/badge/AI-Google%20Gemini%20Flash-orange.svg)](https://aistudio.google.com)
+[![Multi-AI: Gemini | OpenAI | Claude | OpenRouter](https://img.shields.io/badge/AI-Multi--Provider%20Supported-purple.svg)](https://github.com/halalee/tree)
 
-> **TREE** is an automated penetration testing, reconnaissance, and vulnerability triage console built natively for Kali Linux and Debian-based systems. It automates local subnet discovery, multi-stage port and service enumeration, local Exploit-DB correlation, and real-time AI-powered risk assessment with executive PDF reporting.
-
----
-
-## ⚠️ Legal Disclaimer & Warning Notice
-
-> **IMPORTANT NOTICE — AUTHORIZED USE ONLY**
-> 
-> The **TREE Framework** is developed and distributed exclusively for authorized penetration testing, educational cybersecurity research, academic demonstration, and defensive system hardening.
-> 
-> * **Authorization Requirement:** You must obtain prior written consent from the target infrastructure owner before performing any active scanning, host discovery, or service enumeration with this tool.
-> * **Prohibition of Malicious Use:** Executing network scans or vulnerability assessments against unauthorized systems, networks, or endpoints is illegal and violates local, national, and international cybersecurity laws (including the Indian Information Technology Act, the US Computer Fraud and Abuse Act, and equivalent statutes).
-> * **Limitation of Liability:** The author(s), developers, and contributors accept no responsibility or liability for any misuse, damage, data corruption, network disruption, legal ramifications, or collateral issues caused by the application or misapplication of this software. By cloning, compiling, or executing this tool, you assume full responsibility for your actions.
+> **TREE** is an automated penetration testing, reconnaissance, and vulnerability triage framework built for Kali Linux, Debian systems, and WSL environments. It couples dual-layer host discovery and automated service fingerprinting with an encrypted multi-provider AI reasoning engine (Gemini, OpenAI, Claude, OpenRouter) and styled executive PDF reporting.
 
 ---
 
-## ⚡ Key Features
+## ⚡ Key Highlights
 
-* **Interactive Rich CLI Console:** Modular command-driven terminal environment (`tree-sec`) with real-time spinners, status tables, and colorized outputs.
-* **Dual-Layer Host Discovery:** Combines ARP subnet sweeps (`netdiscover`) with targeted active OS fingerprinting (`nmap -O`).
-* **Multi-Stage Service Auditing:** Automatic version extraction, anonymous FTP inspection, OpenSSH CVE checks (e.g., regreSSHion), and web application endpoint crawling.
-* **Exploit-DB Integration:** Automatically correlates identified services and version banners against local `searchsploit` databases.
-* **Resilient AI Triage Streaming:** Streams executive audit reports token-by-token using Gemini Flash with an automatic fallback matrix to handle 503/429 capacity spikes.
-* **Real-Time Key Validation:** Live endpoint health probes prevent saving invalid API keys during setup and automatically verify keys on every startup.
-* **Executive Deliverables:** Generates color-badged, UTF-8 clean PDF audit reports styled for clients and assessment reviews.
-* **Animated Lifecycle Management:** Full ASCII terminal animations for installation (sprouting seed), updates (tree grooming), and removal (chopping).
+* **Multi-Provider AI Architecture:** Choose and switch between Google Gemini, OpenAI (ChatGPT), Anthropic (Claude), and OpenRouter on the fly.
+* **Encrypted API Vault at Rest:** Named API keys are encrypted at rest using host-specific cryptographic derivation (keyed to machine identity and user salt). Keys are never stored in plaintext, preventing unauthorized credential theft.
+* **Proactive Live Health Probes:** Validates keys against provider REST APIs live during entry and automatically checks the active key on every console startup.
+* **Dual-Layer Host & OS Fingerprinting:** Scans local subnets via rapid ARP sweeps (`netdiscover`) followed by targeted Nmap OS detection (`-O -F --osscan-limit --max-os-tries 1`).
+* **Multi-Tier Reconnaissance:** Automated TCP port sweeps, service banner correlation, local Exploit-DB searches (`searchsploit`), anonymous FTP testing, OpenSSH CVE checks (e.g., regreSSHion), and web crawler checks.
+* **Universal Global Execution:** Zero-configuration execution via `/usr/bin/tree-sec` and `/usr/local/bin/tree-sec` allowing launch from any working directory without path collisions.
+* **WSL & Minimal Distro Ready:** Automatically packages missing C/C++ rendering and font libraries (`libcairo2`, `libpango`, `fonts-dejavu-core`) to ensure `xhtml2pdf` runs reliably inside Windows Store Kali WSL instances.
+* **Deep Terminal Animations:** 8-stage visual tree germination sequence (soil prep $\rightarrow$ seed $\rightarrow$ roots $\rightarrow$ sprout $\rightarrow$ sapling $\rightarrow$ mature pine), pruning update animations, and chop-down uninstallation.
 
 ---
 
 ## 🛠️ Architecture Overview
 
-```text
 tree/
-├── tree                      # Main interactive CLI shell & command dispatcher
-├── install.sh                # Lifecycle manager (Install, Update, Remove)
+├── tree                      # Interactive CLI shell, vault manager & command dispatcher
+├── install.sh                # Lifecycle manager (8-stage animation, dependency linker)
 ├── requirements.txt          # Python dependencies
 └── core/
-    ├── scanner.py            # Reconnaissance, Nmap, Exploit-DB & web auditor
-    ├── ai_engine.py          # Gemini REST client, model fallback & SSE streaming
-    └── pdf_generator.py      # Unicode sanitizer & XHTML-to-PDF compiler
-```
+├── scanner.py            # LocalNetworkScanner, ReconScanner, Exploit-DB & WebAuditor
+├── ai_engine.py          # Unified multi-provider streaming client (Gemini/OpenAI/Claude/OpenRouter)
+└── pdf_generator.py      # Unicode sanitizer & XHTML-to-PDF report generator
+
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🚀 Installation & First Run
 
 ### 1. Clone the Repository
 ```bash
 git clone [https://github.com/halalee/tree.git](https://github.com/halalee/tree.git)
 cd tree
-```
 
-### 2. Run the Lifecycle Installer
-```bash
+2. Run the Installer
+Bash
+
 sudo ./install.sh
-```
 
-Select **`[1] Install TREE`** from the interactive menu. The installer will:
-* Detect missing native C/graphics libraries (supporting bare-metal, VMs, and WSL environments).
-* Install required system packages (`nmap`, `netdiscover`, `exploitdb`, `libcairo2`, etc.).
-* Configure Python packages bypassing PEP 668 constraints.
-* Force IPv4 DNS precedence in `/etc/gai.conf` to eliminate resolution delays.
-* Register the global wrapper `sudo tree-sec`.
+Choose [1] Install TREE. The installer runs the 8-stage tree germination animation while handling:
 
----
+    System packages (nmap, netdiscover, exploitdb, build-essential, libcairo2, libpango-1.0-0, etc.).
 
-## 💻 Usage Workflow
+    Python dependencies (rich, beautifulsoup4, xhtml2pdf, reportlab, requests, etc.).
 
-Launch the console from any directory:
+    Global path registration into /usr/bin/tree-sec and /usr/local/bin/tree-sec.
 
-```bash
+    Network IPv4 DNS precedence optimization in /etc/gai.conf.
+
+3. Launch from Any Directory
+Bash
+
 sudo tree-sec
-```
 
-### Typical Assessment Flow
+On first launch, you are prompted to select your preferred AI service (Gemini, ChatGPT, Claude, or OpenRouter), assign a friendly alias, and enter the key. The key is verified live and saved to the encrypted vault.
+💻 CLI Commands & Workflow
+Command	Description
+netscan	Sweep local subnet with ARP discovery and active OS detection.
+select <id>	Lock active target to a discovered device index from the table.
+set target <ip>	Manually specify a target IP or hostname.
+scan	Run port scanning, banner grabbing, Exploit-DB, and web audits.
+analyze	Stream vulnerability triage live using the active AI provider.
+report	Render the latest markdown assessment report in terminal.
+export [file.pdf]	Compile and export the assessment report into a styled PDF.
+key list	List all saved API keys, providers, and encrypted vault values.
+key add	Add, validate, and encrypt a new named API key into the vault.
+key switch <name>	Change the active AI engine/key instantly.
+key remove <name>	Delete an API key securely from the encrypted storage.
+show options	Display active target, provider, and in-memory key state.
+clear	Clear the terminal display.
+exit / quit	Exit the Tree console.
+Typical Assessment Flow
+Plaintext
 
-```text
 tree (no target) > netscan
-# Sweeps the subnet, identifies active devices, and displays IP, MAC, Vendor, and OS
+# Discovers live devices with IP, MAC, Vendor, and OS signatures
 
 tree (no target) > select 1
-# Locks target to the chosen device index (e.g., 192.168.1.34)
+# Targets selected machine (e.g., 192.168.1.45)
 
-tree (192.168.1.34) > scan
-# Performs fast TCP sweep, service version grabs, Exploit-DB mapping, and web audits
+tree (192.168.1.45) > scan
+# Executes 3-tier recon pipeline and queries local searchsploit
 
-tree (192.168.1.34) > analyze
-# Streams live AI risk assessment and prioritized hardening steps directly to the screen
+tree (192.168.1.45) > analyze
+# Streams prioritized security findings and mitigations to the console
 
-tree (192.168.1.34) > export audit_report.pdf
-# Compiles the triage into a branded, executive-ready PDF deliverable
-```
+tree (192.168.1.45) > export audit_report.pdf
+# Generates a styled executive PDF deliverable
 
-### Available Commands
+📝 Maintenance & Release Changelog
+Version 2.4.0
 
-| Command | Description |
-| :--- | :--- |
-| `netscan` | Scan local connected subnet with visual ARP progress & OS detection. |
-| `select <id>` | Select a discovered host from the table as the active target. |
-| `set target <ip>` | Manually specify a target IP or hostname. |
-| `set api_key <key>` | Validate and store a new Google Gemini API key. |
-| `show options` | Display current active target and masked API key status. |
-| `scan` | Execute the full multi-phase reconnaissance pipeline on the target. |
-| `analyze` | Stream Gemini AI vulnerability triage with live terminal output. |
-| `report` | Render the last generated markdown report in the console. |
-| `export [file.pdf]`| Compile and export the assessment to a color-highlighted PDF. |
-| `clear` | Clear the terminal display. |
-| `exit` / `quit` | Exit the Tree console. |
+    Multi-Provider AI Engine:
 
----
+        Added unified SSE streaming support in core/ai_engine.py for Google Gemini, OpenAI (ChatGPT), Anthropic (Claude), and OpenRouter.
 
-## 📝 Update & Maintenance Changelog
+    Host-Derived Encrypted Key Vault:
 
-### Version 2.2.0
-* **Live API Key Validation:**
-  * Added proactive Google Gemini REST API probes during first-time key setup.
-  * Added background key verification on every console startup.
-  * Implemented validation for manual key updates via `set api_key <key>`.
-* **WSL / Minimal VM Compatibility:**
-  * Added native dependencies (`libcairo2`, `libpango-1.0-0`, `libjpeg-dev`, `fonts-dejavu-core`) to `install.sh` to resolve `xhtml2pdf` rendering crashes in Microsoft Store Kali WSL instances.
-* **Interactive Update Changelog:**
-  * Option 2 (`Update TREE`) in `install.sh` now fetches and previews incoming commit messages, authors, timestamps, and diff statistics before prompting to apply updates.
+        Implemented machine-keyed XOR/Fernet style encryption at rest for API keys in ~/.tree_config.json.
 
-### Version 2.1.0
-* **Active OS Detection in `netscan`:**
-  * Integrated fast Nmap OS fingerprinting (`-O -F --osscan-limit --max-os-tries 1`) into `LocalNetworkScanner`.
-  * Added an **OS Detection** column to the Rich host discovery table.
-* **AI Engine Resilience & Fallback Matrix:**
-  * Implemented an automated failover chain (`gemini-flash-latest` -> `gemini-2.5-flash-lite` -> `gemini-3.5-flash` -> `gemini-2.5-flash`) to gracefully bypass Google API 503/429 capacity spikes.
-  * Fixed unhandled `requests.exceptions.RequestException` and DNS resolution timeout bugs in `tree`.
-* **Installer Optimization:**
-  * Replaced unconditional package re-installations with `dpkg -s` checks, eliminating multi-gigabyte Exploit-DB re-downloads and slashing install times.
+        Added key list, key add, key switch, and key remove management commands directly inside the interactive console.
 
-### Version 2.0.0
-* **Core Architecture Overhaul:**
-  * Modularized scanner into discrete components: `ReconScanner`, `ExploitDBCorrelator`, `ServiceAuditor`, and `WebAuditor`.
-  * Built SSE streaming REST client for Gemini in `core/ai_engine.py`.
-  * Added Unicode-sanitized PDF compiler using `xhtml2pdf` in `core/pdf_generator.py`.
-* **Terminal Experience:**
-  * Added animated ASCII art sequences for installation, update, and removal routines.
+    Proactive Key Validation:
 
----
+        Live health check endpoints ping provider APIs during key registration and on every console launch.
 
-## ⚖️ License & Intellectual Property
+    Global Path & Wrapper Hardening:
 
-This software is released under the **MIT License**.
+        Replaced heredocs with safe printf wrappers in install.sh to prevent Zsh history expansion syntax errors (zsh: event not found).
 
-```text
-MIT License
+        Dual-registered wrappers in /usr/bin/tree-sec and /usr/local/bin/tree-sec for universal access.
 
-Copyright (c) 2026 Muhammed Rayyan
+Version 2.3.0
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+    Lifecycle Visuals & Usability:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+        Expanded install animation to an 8-stage tree germination progression (soil preparation, seed, roots, sprout, sapling, branching, mature pine).
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+        Added post-install guidance card showing immediate next steps and basic commands.
+
+    WSL Graphics & PDF Fixes:
+
+        Bundled libcairo2, libpango-1.0-0, libjpeg-dev, and fonts-dejavu-core into install.sh to resolve xhtml2pdf font rendering failures on Kali WSL.
+
+    Pre-Update Diff Inspector:
+
+        install.sh Option 2 previews incoming commit messages, authors, relative timestamps, and diff statistics before applying updates.
+
+Version 2.2.0
+
+    OS Fingerprinting:
+
+        Integrated fast Nmap OS sweeps (-O -F --osscan-limit --max-os-tries 1) into LocalNetworkScanner and added an OS Detection column to the Rich host table.
+
+    Gemini Model Failover Chain:
+
+        Added automated model fallback (gemini-flash-latest → gemini-2.5-flash-lite → gemini-3.5-flash → gemini-2.5-flash) for handling API rate limits and HTTP 503 capacity spikes.
+
+📄 License
+
+Distributed under the MIT License. See LICENSE for details.
