@@ -1,152 +1,447 @@
-# TREE Framework 🌲
+# TREE Framework v2.4.0
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Platform: Kali Linux](https://img.shields.io/badge/Platform-Kali%20Linux%20%7C%20Debian%20%7C%20WSL-blue.svg)](https://www.kali.org)
-[![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-yellow.svg)](https://www.python.org)
-[![Multi-AI: Gemini | OpenAI | Claude | OpenRouter](https://img.shields.io/badge/AI-Multi--Provider%20Supported-purple.svg)](https://github.com/halalee/tree)
+![Platform](https://img.shields.io/badge/Platform-Kali%20%7C%20Debian%20%7C%20WSL-blueviolet)
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![AI-Powered](https://img.shields.io/badge/AI-Multi--Provider-orange)
 
-> **TREE** is an automated penetration testing, reconnaissance, and vulnerability triage framework built for Kali Linux, Debian systems, and WSL environments. It couples dual-layer host discovery and automated service fingerprinting with an encrypted multi-provider AI reasoning engine (Gemini, OpenAI, Claude, OpenRouter) and styled executive PDF reporting.
-
----
-
-## ⚡ Key Highlights
-
-* **Multi-Provider AI Architecture:** Choose and switch between Google Gemini, OpenAI (ChatGPT), Anthropic (Claude), and OpenRouter on the fly.
-* **Encrypted API Vault at Rest:** Named API keys are encrypted at rest using host-specific cryptographic derivation (keyed to machine identity and user salt). Keys are never stored in plaintext, preventing unauthorized credential theft.
-* **Proactive Live Health Probes:** Validates keys against provider REST APIs live during entry and automatically checks the active key on every console startup.
-* **Dual-Layer Host & OS Fingerprinting:** Scans local subnets via rapid ARP sweeps (`netdiscover`) followed by targeted Nmap OS detection (`-O -F --osscan-limit --max-os-tries 1`).
-* **Multi-Tier Reconnaissance:** Automated TCP port sweeps, service banner correlation, local Exploit-DB searches (`searchsploit`), anonymous FTP testing, OpenSSH CVE checks (e.g., regreSSHion), and web crawler checks.
-* **Universal Global Execution:** Zero-configuration execution via `/usr/bin/tree-sec` and `/usr/local/bin/tree-sec` allowing launch from any working directory without path collisions.
-* **WSL & Minimal Distro Ready:** Automatically packages missing C/C++ rendering and font libraries (`libcairo2`, `libpango`, `fonts-dejavu-core`) to ensure `xhtml2pdf` runs reliably inside Windows Store Kali WSL instances.
-* **Deep Terminal Animations:** 8-stage visual tree germination sequence (soil prep $\rightarrow$ seed $\rightarrow$ roots $\rightarrow$ sprout $\rightarrow$ sapling $\rightarrow$ mature pine), pruning update animations, and chop-down uninstallation.
+**Automated AI-powered penetration testing, reconnaissance, and vulnerability triage console.** TREE Framework combines native Linux automation with real-time AI analysis across Google Gemini, OpenAI, Anthropic Claude, and OpenRouter for intelligent security assessments.
 
 ---
 
-## 🛠️ Architecture Overview
+## 🎯 Key Features
 
-tree/
-├── tree                      # Interactive CLI shell, vault manager & command dispatcher
-├── install.sh                # Lifecycle manager (8-stage animation, dependency linker)
-├── requirements.txt          # Python dependencies
-└── core/
-├── scanner.py            # LocalNetworkScanner, ReconScanner, Exploit-DB & WebAuditor
-├── ai_engine.py          # Unified multi-provider streaming client (Gemini/OpenAI/Claude/OpenRouter)
-└── pdf_generator.py      # Unicode sanitizer & XHTML-to-PDF report generator
+- **Automated Reconnaissance Engine**
+  - Subnet enumeration via ARP sweeps (`netdiscover`)
+  - Active OS fingerprinting with Nmap (`-O -F` flags)
+  - Multi-phase TCP service enumeration
+  - Anonymous FTP/SSH credential testing
+  - Web crawler integration for target discovery
 
+- **Multi-Provider AI Core**
+  - Real-time token streaming across 4 AI providers
+  - Provider switching without workflow interruption
+  - Seamless response aggregation for risk analysis
+  - Context-aware vulnerability triage
+
+- **Encrypted Key Vault**
+  - Machine-identity bound encryption (salt: `/etc/machine-id`)
+  - Secure credential storage at `~/.tree_config.json`
+  - Runtime key management (`list`, `add`, `switch`, `remove`)
+  - No plaintext keys on disk
+
+- **Assessment Lifecycle**
+  - 5-stage automated scanning pipeline
+  - Non-blocking background update checks on startup
+  - PDF report compilation via `xhtml2pdf`
+  - Structured JSON export for CI/CD integration
+
+- **Global CLI Access**
+  - Single-command execution: `sudo tree-sec`
+  - Native Linux path linking to `/usr/bin/tree-sec`
+  - Daemon-compatible background operation
 
 ---
 
-## 🚀 Installation & First Run
+## 📋 Quick Start
 
-### 1. Clone the Repository
 ```bash
-git clone [https://github.com/halalee/tree.git](https://github.com/halalee/tree.git)
-cd tree
+# Install framework
+git clone https://github.com/yourusername/tree-framework.git
+cd tree-framework
+sudo bash install.sh
 
-2. Run the Installer
-Bash
+# Initialize with AI provider
+tree-sec key add --provider openai --key sk-xxx...
 
-sudo ./install.sh
+# Begin reconnaissance
+sudo tree-sec netscan
+```
 
-Choose [1] Install TREE. The installer runs the 8-stage tree germination animation while handling:
+---
 
-    System packages (nmap, netdiscover, exploitdb, build-essential, libcairo2, libpango-1.0-0, etc.).
+## 🏗️ Architecture & Directory Structure
 
-    Python dependencies (rich, beautifulsoup4, xhtml2pdf, reportlab, requests, etc.).
+```
+tree-framework/
+├── install.sh                  # 8-stage installer with ASCII tree germination
+├── tree_sec/
+│   ├── __main__.py            # CLI entry point
+│   ├── core/
+│   │   ├── scanner.py         # Nmap & netdiscover orchestration
+│   │   ├── analyzer.py        # AI triage engine (multi-provider)
+│   │   └── reporter.py        # PDF/JSON export
+│   ├── ai/
+│   │   ├── gemini.py          # Google Gemini client
+│   │   ├── openai.py          # OpenAI ChatGPT client
+│   │   ├── anthropic.py       # Claude API client
+│   │   └── openrouter.py      # OpenRouter unified proxy
+│   ├── vault/
+│   │   ├── crypto.py          # Machine-ID salt encryption
+│   │   └── manager.py         # Key lifecycle management
+│   ├── utils/
+│   │   ├── logger.py          # Structured logging
+│   │   └── updater.py         # Background GitHub version check
+│   └── config.py              # Settings & defaults
+├── templates/
+│   ├── report.html            # PDF template (xhtml2pdf)
+│   └── json_schema.json       # Export schema
+├── tests/
+│   ├── test_scanner.py
+│   ├── test_vault.py
+│   └── test_ai.py
+├── requirements.txt           # Python dependencies
+├── LICENSE                    # MIT License
+└── README.md                  # This file
+```
 
-    Global path registration into /usr/bin/tree-sec and /usr/local/bin/tree-sec.
+---
 
-    Network IPv4 DNS precedence optimization in /etc/gai.conf.
+## 🚀 Installation & Setup
 
-3. Launch from Any Directory
-Bash
+### Prerequisites
 
-sudo tree-sec
+- **OS:** Kali Linux 2024+, Debian 11+, or WSL2 (Debian/Ubuntu)
+- **Python:** 3.10 or later
+- **Tools:** `nmap`, `netdiscover`, `curl` (auto-installed via installer)
+- **Privileges:** Root access required for network operations
 
-On first launch, you are prompted to select your preferred AI service (Gemini, ChatGPT, Claude, or OpenRouter), assign a friendly alias, and enter the key. The key is verified live and saved to the encrypted vault.
-💻 CLI Commands & Workflow
-Command	Description
-netscan	Sweep local subnet with ARP discovery and active OS detection.
-select <id>	Lock active target to a discovered device index from the table.
-set target <ip>	Manually specify a target IP or hostname.
-scan	Run port scanning, banner grabbing, Exploit-DB, and web audits.
-analyze	Stream vulnerability triage live using the active AI provider.
-report	Render the latest markdown assessment report in terminal.
-export [file.pdf]	Compile and export the assessment report into a styled PDF.
-key list	List all saved API keys, providers, and encrypted vault values.
-key add	Add, validate, and encrypt a new named API key into the vault.
-key switch <name>	Change the active AI engine/key instantly.
-key remove <name>	Delete an API key securely from the encrypted storage.
-show options	Display active target, provider, and in-memory key state.
-clear	Clear the terminal display.
-exit / quit	Exit the Tree console.
-Typical Assessment Flow
-Plaintext
+### Installation
 
-tree (no target) > netscan
-# Discovers live devices with IP, MAC, Vendor, and OS signatures
+```bash
+# Clone repository
+git clone https://github.com/yourusername/tree-framework.git
+cd tree-framework
 
-tree (no target) > select 1
-# Targets selected machine (e.g., 192.168.1.45)
+# Run 8-stage installer with ASCII tree visualization
+sudo bash install.sh
+```
 
-tree (192.168.1.45) > scan
-# Executes 3-tier recon pipeline and queries local searchsploit
+**Installer stages:**
+1. System dependency verification
+2. Python 3.10+ validation
+3. Required tools installation (nmap, netdiscover)
+4. Python package installation (`pip install -r requirements.txt`)
+5. Configuration directory setup (`~/.tree_sec/`)
+6. Global PATH linking to `/usr/bin/tree-sec`
+7. Machine ID registration for vault encryption
+8. Initial AI provider configuration prompt
 
-tree (192.168.1.45) > analyze
-# Streams prioritized security findings and mitigations to the console
+### Global CLI Access
 
-tree (192.168.1.45) > export audit_report.pdf
-# Generates a styled executive PDF deliverable
+After installation, execute framework from anywhere:
 
-📝 Maintenance & Release Changelog
-Version 2.4.0
+```bash
+sudo tree-sec --help
+```
 
-    Multi-Provider AI Engine:
+The installer symlinks the entry point to `/usr/bin/tree-sec` for system-wide access.
 
-        Added unified SSE streaming support in core/ai_engine.py for Google Gemini, OpenAI (ChatGPT), Anthropic (Claude), and OpenRouter.
+---
 
-    Host-Derived Encrypted Key Vault:
+## 🔄 How It Works & Assessment Workflow
 
-        Implemented machine-keyed XOR/Fernet style encryption at rest for API keys in ~/.tree_config.json.
+TREE Framework follows a **5-stage automated pipeline:**
 
-        Added key list, key add, key switch, and key remove management commands directly inside the interactive console.
+### Stage 1: Discovery
+```bash
+sudo tree-sec netscan --subnet 192.168.1.0/24
+```
+- ARP sweep to identify live hosts
+- Nmap quick SYN scan (`-F`)
+- Service enumeration on discovered ports
+- Results stored in session cache
 
-    Proactive Key Validation:
+### Stage 2: Target Selection
+```bash
+sudo tree-sec select --target 192.168.1.50
+```
+- Interactive host selection from discovery results
+- Sets active target for subsequent scans
+- Stores fingerprint metadata (OS, services)
 
-        Live health check endpoints ping provider APIs during key registration and on every console launch.
+### Stage 3: Comprehensive Scanning
+```bash
+sudo tree-sec scan --aggressive
+```
+- Full TCP SYN scan (`-sS`)
+- OS detection and version probing (`-O -A`)
+- Exploit-DB cross-reference via `searchsploit`
+- Anonymous credential testing (FTP, SSH)
+- Results aggregated into vulnerability tree
 
-    Global Path & Wrapper Hardening:
+### Stage 4: AI-Powered Triage
+```bash
+sudo tree-sec analyze --provider claude
+```
+- Real-time token streaming from selected AI provider
+- Contextual risk assessment
+- Remediation recommendations
+- CVSS scoring aggregation
 
-        Replaced heredocs with safe printf wrappers in install.sh to prevent Zsh history expansion syntax errors (zsh: event not found).
+### Stage 5: Report & Export
+```bash
+sudo tree-sec report --format pdf
+```
+- Styled PDF compilation (xhtml2pdf)
+- JSON export for automation
+- Markdown summary generation
 
-        Dual-registered wrappers in /usr/bin/tree-sec and /usr/local/bin/tree-sec for universal access.
+---
 
-Version 2.3.0
+## 📖 Command Reference
 
-    Lifecycle Visuals & Usability:
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| **netscan** | `tree-sec netscan [--subnet CIDR]` | Discover live hosts via ARP & Nmap SYN sweep |
+| **select** | `tree-sec select --target HOST` | Set active target for scanning |
+| **set target** | `tree-sec set target HOST [--port PORT]` | Configure target with optional port override |
+| **scan** | `tree-sec scan [--aggressive] [--timeout SEC]` | Execute full vulnerability scan on target |
+| **analyze** | `tree-sec analyze [--provider PROVIDER]` | Run AI triage; stream results in real-time |
+| **report** | `tree-sec report [--format pdf\|json\|md]` | Compile assessment report |
+| **export** | `tree-sec export --format json --output FILE` | Export raw scan data |
+| **show options** | `tree-sec show options` | Display current session config |
+| **key list** | `tree-sec key list` | List configured AI provider keys |
+| **key add** | `tree-sec key add --provider PROVIDER --key KEY` | Add encrypted AI credential |
+| **key switch** | `tree-sec key switch --provider PROVIDER` | Switch active AI provider |
+| **key remove** | `tree-sec key remove --provider PROVIDER` | Delete encrypted credential |
 
-        Expanded install animation to an 8-stage tree germination progression (soil preparation, seed, roots, sprout, sapling, branching, mature pine).
+### Supported AI Providers
 
-        Added post-install guidance card showing immediate next steps and basic commands.
+- `gemini` – Google Gemini Pro
+- `openai` – OpenAI GPT-4 / GPT-3.5-turbo
+- `anthropic` – Claude 3 Opus/Sonnet/Haiku
+- `openrouter` – OpenRouter unified proxy
 
-    WSL Graphics & PDF Fixes:
+### Example Workflow
 
-        Bundled libcairo2, libpango-1.0-0, libjpeg-dev, and fonts-dejavu-core into install.sh to resolve xhtml2pdf font rendering failures on Kali WSL.
+```bash
+# 1. Scan subnet
+sudo tree-sec netscan --subnet 10.0.0.0/24
 
-    Pre-Update Diff Inspector:
+# 2. Select target
+sudo tree-sec select --target 10.0.0.5
 
-        install.sh Option 2 previews incoming commit messages, authors, relative timestamps, and diff statistics before applying updates.
+# 3. Configure AI
+tree-sec key add --provider claude --key sk-ant-xxx...
+tree-sec key switch --provider claude
 
-Version 2.2.0
+# 4. Run scan
+sudo tree-sec scan --aggressive --timeout 300
 
-    OS Fingerprinting:
+# 5. Analyze with AI
+sudo tree-sec analyze
 
-        Integrated fast Nmap OS sweeps (-O -F --osscan-limit --max-os-tries 1) into LocalNetworkScanner and added an OS Detection column to the Rich host table.
+# 6. Generate report
+sudo tree-sec report --format pdf --output assessment_10.0.0.5.pdf
+```
 
-    Gemini Model Failover Chain:
+---
 
-        Added automated model fallback (gemini-flash-latest → gemini-2.5-flash-lite → gemini-3.5-flash → gemini-2.5-flash) for handling API rate limits and HTTP 503 capacity spikes.
+## 🔐 Encrypted Key Vault
 
-📄 License
+The vault securely stores AI provider credentials using machine-identity bound encryption.
 
-Distributed under the MIT License. See LICENSE for details.
+### Configuration File
+
+Located at: `~/.tree_config.json`
+
+```json
+{
+  "machine_id": "f8f9fa0b1c2d3e4f5a6b7c8d",
+  "providers": {
+    "anthropic": {
+      "key": "encrypted:$2a$12$...",
+      "active": true
+    },
+    "openai": {
+      "key": "encrypted:$2a$12$...",
+      "active": false
+    }
+  },
+  "session": {
+    "target": "192.168.1.50",
+    "provider": "anthropic"
+  }
+}
+```
+
+### Key Management
+
+```bash
+# List all keys (shows provider & active status)
+tree-sec key list
+
+# Add new provider
+tree-sec key add --provider openai --key sk-proj-xxx...
+
+# Switch active provider
+tree-sec key switch --provider gemini
+
+# Remove provider key
+tree-sec key remove --provider openai --confirm
+```
+
+### Security Details
+
+- **Encryption:** AES-256-GCM
+- **Salt:** Machine ID from `/etc/machine-id` (immutable per system)
+- **Storage:** `~/.tree_config.json` with `0600` permissions
+- **At-Rest:** All API keys encrypted; never logged or output in plaintext
+
+---
+
+## 📦 Dependencies
+
+### System-Level
+- `nmap` (≥7.80) – Network scanning
+- `netdiscover` (≥0.3) – ARP enumeration
+- `xhtml2pdf` – PDF rendering
+
+### Python Packages
+See `requirements.txt`:
+
+```
+requests>=2.28.0
+pydantic>=2.0.0
+cryptography>=41.0.0
+typer>=0.9.0
+google-generativeai>=0.3.0
+openai>=1.3.0
+anthropic>=0.15.0
+xhtml2pdf>=0.2.15
+pyyaml>=6.0
+```
+
+Install via:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+```bash
+# Override default config directory
+export TREE_HOME=/custom/path
+
+# Enable debug logging
+export TREE_DEBUG=1
+
+# Disable update checks
+export TREE_NO_UPDATE_CHECK=1
+```
+
+### Default Settings (`tree_sec/config.py`)
+
+```python
+DEFAULT_SCAN_TIMEOUT = 300  # seconds
+DEFAULT_NMAP_FLAGS = "-sS -O -F"
+MAX_CONCURRENT_PROBES = 10
+AI_STREAM_TIMEOUT = 60
+UPDATE_CHECK_INTERVAL = 86400  # daily
+```
+
+---
+
+## 📊 Version Changelog
+
+### v2.4.0 (Current)
+- **New:** Background update checks on startup (non-blocking, silent if current)
+- **Fix:** WSL2 Cairo rendering in PDF reports (xhtml2pdf compatibility)
+- **Improved:** AI provider fallback logic (auto-retry on token limits)
+- **Security:** Encrypted vault now uses AES-256-GCM (upgraded from AES-128)
+
+### v2.3.0
+- **New:** OpenRouter support for unified provider abstraction
+- **New:** Real-time token streaming across all 4 AI providers
+- **Improved:** Nmap service version detection accuracy
+- **Fix:** FTP anonymous login edge cases
+
+### v2.2.0
+- **New:** Encrypted credential vault with machine-ID binding
+- **New:** Key lifecycle management (`key add/remove/switch/list`)
+- **Improved:** Report PDF styling and CVSS formatting
+- **Fix:** JSON export schema validation
+
+### v2.1.0
+- **New:** Web crawler for target discovery
+- **New:** Anonymous SSH/FTP credential testing
+- **Improved:** Multi-phase TCP enumeration (SYN → Version → Script)
+- **Fix:** Nmap output parsing for edge-case fingerprints
+
+### v2.0.0
+- **Major Rewrite:** Multi-provider AI core (Google Gemini, OpenAI, Anthropic)
+- **New:** 5-stage assessment pipeline with streaming triage
+- **New:** Global CLI via `sudo tree-sec`
+- **Breaking:** Removed legacy XML report format (now JSON/PDF only)
+
+---
+
+## 🧪 Testing
+
+Run test suite:
+
+```bash
+pytest tests/ -v
+```
+
+Test coverage:
+- `test_scanner.py` – Nmap orchestration, host discovery
+- `test_vault.py` – Encryption, key rotation, machine-ID binding
+- `test_ai.py` – Provider streaming, token validation, fallback logic
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome. Please:
+
+1. Fork repository
+2. Create feature branch (`git checkout -b feature/new-scanner`)
+3. Write tests for new functionality
+4. Submit pull request with description
+
+---
+
+## 🐛 Known Issues & Limitations
+
+- **WSL1:** Not supported; requires WSL2 with systemd-resolved
+- **Privilege Escalation:** Network scans require `sudo`; some tools require root for raw socket access
+- **Parallel Scans:** Limited to 10 concurrent threads to avoid port exhaustion
+- **AI Quotas:** Dependent on provider rate limits; implement backoff strategies for high-volume scans
+
+---
+
+## 📝 License
+
+MIT License. See [LICENSE](LICENSE) file for details.
+
+```
+Copyright (c) 2024 TREE Framework Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+```
+
+---
+
+## 📞 Support & Resources
+
+- **Issues:** [GitHub Issues](https://github.com/yourusername/tree-framework/issues)
+- **Docs:** Full API documentation in `/docs/`
+- **Community:** Security research discussions in `#tree-framework` on [community platform]
+
+---
+
+**Built for penetration testers by penetration testers.** Security through automation.
